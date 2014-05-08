@@ -1,0 +1,4 @@
+@set UPDATED 15 April 2014
+@set UPDATED-MONTH April 2014
+@set EDITION 0.8.0-rc2
+@set VERSION 0.8.0-rc2
