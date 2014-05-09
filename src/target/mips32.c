@@ -198,11 +198,18 @@ int mips32_save_context(struct target *target)
     struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 
     /* read core registers */
-    mips32_pracc_read_regs(ejtag_info, mips32->core_regs);
-
+	LOG_INFO ("calling pracc_read_regs");
+    int retval = mips32_pracc_read_regs(ejtag_info, mips32->core_regs);
+	if (retval != ERROR_OK)
+		return retval;
+	
     for (i = 0; i < MIPS32NUMCOREREGS; i++) {
-	if (!mips32->core_cache->reg_list[i].valid)
-	    mips32->read_core_reg(target, i);
+		if (!mips32->core_cache->reg_list[i].valid) {
+			LOG_INFO ("calling read_core_reg");
+			retval = mips32->read_core_reg(target, i);
+			if (retval != ERROR_OK)
+				return retval;
+		}
     }
 
     return ERROR_OK;
@@ -816,22 +823,35 @@ COMMAND_HANDLER(mips32_handle_cp0_command)
     return ERROR_OK;
 }
 
-COMMAND_HANDLER(handle_cpuinfo_command)
+COMMAND_HANDLER(mips32_handle_cpuinfo_command)
 {
+	LOG_INFO ("CMD_ARGC: %d", CMD_ARGC);
+
 	/* No arg.s for now */
-	if (CMD_ARGC > 1)
+	if (CMD_ARGC >= 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
 	LOG_INFO ("cpuinfo");
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(handle_invalidate_cache_command)
+COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
 {
-    if (CMD_ARGC == 1)
-		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], ejtag_info->scan_delay);
+    int retval;
+    struct target *target = get_current_target(CMD_CTX);
+    struct mips32_common *mips32 = target_to_mips32(target);
+    struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 
-	LOG_INFO ("invalidate cache");
+	if (CMD_ARGC >= 2)
+		return ERROR_COMMAND_SYNTAX_ERROR;
+
+    if (CMD_ARGC == 1) {
+		/* PARSE command options - all/inst/data/allnowb/datanowb */
+		LOG_INFO ("options - all/inst/data/allnowb/datanowb");
+	} else {
+		LOG_INFO ("invalidate cache");
+	}
+
 	return ERROR_OK;
 }
 
@@ -868,14 +888,14 @@ static const struct command_registration mips32_exec_command_handlers[] = {
     },
 	{
 		.name = "cpuinfo",
-		.handler = cpuinfo_command,
+		.handler = mips32_handle_cpuinfo_command,
 		.mode = COMMAND_EXEC,
 		.help = "cpuinfo displays information for the current CPU core.",
 		.usage = "",
 	},
 	{
 		.name = "invalidate",
-		.handler = invalidate_cache_command,
+		.handler = mips32_handle_invalidate_cache_command,
 		.mode = COMMAND_EXEC,
 		.help = "Invalidate either or both of the instruction and data caches.",
 		.usage = "[all|inst|data|allnowb|datanowb]",

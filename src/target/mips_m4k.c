@@ -95,26 +95,35 @@ static int mips_m4k_debug_entry(struct target *target)
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 
-	mips32_save_context(target);
+	int retval = mips32_save_context(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* make sure stepping disabled, SSt bit in CP0 debug register cleared */
-	mips_ejtag_config_step(ejtag_info, 0);
+	retval = mips_ejtag_config_step(ejtag_info, 0);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* make sure break unit configured */
-	mips32_configure_break_unit(target);
+	retval = mips32_configure_break_unit(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* attempt to find halt reason */
-	mips_m4k_examine_debug_reason(target);
+	retval = mips_m4k_examine_debug_reason(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* default to mips32 isa, it will be changed below if required */
 	mips32->isa_mode = MIPS32_ISA_MIPS32;
 
-	if (ejtag_info->impcode & EJTAG_IMP_MIPS16)
+	if (ejtag_info->impcode & EJTAG_IMP_MIPS16) {
 		mips32->isa_mode = buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 1);
+	}
 
 	LOG_DEBUG("entered debug state at PC 0x%" PRIx32 ", target->state: %s",
-			buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32),
-			target_state_name(target));
+			  buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32),
+			  target_state_name(target));
 
 	return ERROR_OK;
 }
@@ -315,11 +324,9 @@ static int mips_m4k_assert_reset(struct target *target)
 	}
 
 	if (target->reset_halt) {
-		LOG_INFO ("use hardware to catch reset");
 		/* use hardware to catch reset */
 		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_EJTAGBOOT);
 	} else {
-		LOG_INFO ("EJTAG - NORMALBOOT");
 		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_NORMALBOOT);
 	}
 
@@ -379,15 +386,23 @@ static int mips_m4k_single_step_core(struct target *target)
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 
 	/* configure single step mode */
-	mips_ejtag_config_step(ejtag_info, 1);
+	int retval = mips_ejtag_config_step(ejtag_info, 1);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* disable interrupts while stepping */
-	mips32_enable_interrupts(target, 0);
+	retval = mips32_enable_interrupts(target, 0);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* exit debug mode */
-	mips_ejtag_exit_debug(ejtag_info);
+	retval = mips_ejtag_exit_debug(ejtag_info);
+	if (retval != ERROR_OK)
+		return retval;
 
-	mips_m4k_debug_entry(target);
+	retval = mips_m4k_debug_entry(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	return ERROR_OK;
 }
@@ -523,6 +538,7 @@ static int mips_m4k_step(struct target *target, int current,
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 	struct breakpoint *breakpoint = NULL;
+	int retval;
 
 	if (target->state != TARGET_HALTED) {
 		LOG_WARNING("target not halted");
@@ -564,7 +580,9 @@ static int mips_m4k_step(struct target *target, int current,
 	register_cache_invalidate(mips32->core_cache);
 
 	LOG_DEBUG("target stepped ");
-	mips_m4k_debug_entry(target);
+	retval = mips_m4k_debug_entry(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	if (breakpoint)
 		mips_m4k_set_breakpoint(target, breakpoint);
