@@ -222,17 +222,21 @@ int mips_ejtag_config_step(struct mips_ejtag *ejtag_info, int enable_step)
 	if (ctx.retval != ERROR_OK)
 		goto exit;
 
-	pracc_add(&ctx, 0, MIPS32_MFC0(8, 23, 0));			/* move COP0 Debug to $8 */
-	pracc_add(&ctx, 0, MIPS32_ORI(8, 8, 0x0100));			/* set SSt bit in debug reg */
+	pracc_add(&ctx, 0, MIPS32_MFC0(8, 23, 0));			                /* move COP0 Debug to $8 */
+	pracc_add(&ctx, 0, MIPS32_ORI(8, 8, 0x0100));			            /* set SSt bit in debug reg */
 	if (!enable_step)
-		pracc_add(&ctx, 0, MIPS32_XORI(8, 8, 0x0100));		/* clear SSt bit in debug reg */
+		pracc_add(&ctx, 0, MIPS32_XORI(8, 8, 0x0100));		            /* clear SSt bit in debug reg */
 
-	pracc_add(&ctx, 0, MIPS32_MTC0(8, 23, 0));			/* move $8 to COP0 Debug */
+	pracc_add(&ctx, 0, MIPS32_MTC0(8, 23, 0));			                /* move $8 to COP0 Debug */
 	pracc_add(&ctx, 0, MIPS32_LUI(8, UPPER16(ejtag_info->reg8)));		/* restore upper 16 bits  of $8 */
 	pracc_add(&ctx, 0, MIPS32_B(NEG16((ctx.code_count + 1))));			/* jump to start */
 	pracc_add(&ctx, 0, MIPS32_ORI(8, 8, LOWER16(ejtag_info->reg8)));	/* restore lower 16 bits of $8 */
 
-	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL);
+//	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL);
+	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, NULL);
+//	ctx.retval = mips32_pracc_exec(ejtag_info, ctx.code_count, ctx.pracc_list, 0, NULL,
+//								   ctx.store_count, NULL, ctx.code_count - 1);
+
 exit:
 	pracc_queue_free(&ctx);
 	return ctx.retval;
@@ -293,10 +297,14 @@ error:
 int mips_ejtag_exit_debug(struct mips_ejtag *ejtag_info)
 {
 	uint32_t pracc_list[] = {MIPS32_DRET, 0};
+//	uint32_t instr = MIPS32_DRET;
 	struct pracc_queue_info ctx = {.max_code = 1, .pracc_list = pracc_list, .code_count = 1, .store_count = 0};
 
 	/* execute our dret instruction */
-	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL);
+//	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL);
+	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, NULL);
+//	ctx.retval = mips32_pracc_exec(ejtag_info, ctx.code_count, ctx.pracc_list, 0, NULL,
+//								   ctx.store_count, NULL, ctx.code_count - 1);
 
 	/* pic32mx workaround, false pending at low core clock */
 	jtag_add_sleep(1000);
@@ -340,6 +348,7 @@ static void mips_ejtag_init_mmr(struct mips_ejtag *ejtag_info)
 		ejtag_info->ejtag_dba_step_size	= EJTAG_V25_DBAn_STEP;
 	}
 }
+
 
 int mips_ejtag_init(struct mips_ejtag *ejtag_info)
 {

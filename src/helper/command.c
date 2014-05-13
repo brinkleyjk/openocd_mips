@@ -2,7 +2,7 @@
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
  *                                                                         *
- *   Copyright (C) 2007,2008 Øyvind Harboe                                 *
+ *   Copyright (C) 2007,2008 Øyvind Harboe                             *
  *   oyvind.harboe@zylin.com                                               *
  *                                                                         *
  *   Copyright (C) 2008, Duane Ellis                                       *
@@ -365,7 +365,7 @@ static int register_command_handler(struct command_context *cmd_ctx,
 
 	LOG_DEBUG("registering '%s'...", ocd_name);
 
-	Jim_CmdProc *func = c->handler ? &script_command : &command_unknown;
+	Jim_CmdProc func = c->handler ? &script_command : &command_unknown;
 	int retval = Jim_CreateCommand(interp, ocd_name, func, c, NULL);
 	free(ocd_name);
 	if (JIM_OK != retval)

@@ -95,26 +95,35 @@ static int mips_m4k_debug_entry(struct target *target)
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 
-	mips32_save_context(target);
+	int retval = mips32_save_context(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* make sure stepping disabled, SSt bit in CP0 debug register cleared */
-	mips_ejtag_config_step(ejtag_info, 0);
+	retval = mips_ejtag_config_step(ejtag_info, 0);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* make sure break unit configured */
-	mips32_configure_break_unit(target);
+	retval = mips32_configure_break_unit(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* attempt to find halt reason */
-	mips_m4k_examine_debug_reason(target);
+	retval = mips_m4k_examine_debug_reason(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* default to mips32 isa, it will be changed below if required */
 	mips32->isa_mode = MIPS32_ISA_MIPS32;
 
-	if (ejtag_info->impcode & EJTAG_IMP_MIPS16)
+	if (ejtag_info->impcode & EJTAG_IMP_MIPS16) {
 		mips32->isa_mode = buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 1);
+	}
 
 	LOG_DEBUG("entered debug state at PC 0x%" PRIx32 ", target->state: %s",
-			buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32),
-			target_state_name(target));
+			  buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32),
+			  target_state_name(target));
 
 	return ERROR_OK;
 }
@@ -317,8 +326,9 @@ static int mips_m4k_assert_reset(struct target *target)
 	if (target->reset_halt) {
 		/* use hardware to catch reset */
 		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_EJTAGBOOT);
-	} else
+	} else {
 		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_NORMALBOOT);
+	}
 
 	if (jtag_reset_config & RESET_HAS_SRST) {
 		/* here we should issue a srst only, but we may have to assert trst as well */
@@ -376,15 +386,23 @@ static int mips_m4k_single_step_core(struct target *target)
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 
 	/* configure single step mode */
-	mips_ejtag_config_step(ejtag_info, 1);
+	int retval = mips_ejtag_config_step(ejtag_info, 1);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* disable interrupts while stepping */
-	mips32_enable_interrupts(target, 0);
+	retval = mips32_enable_interrupts(target, 0);
+	if (retval != ERROR_OK)
+		return retval;
 
 	/* exit debug mode */
-	mips_ejtag_exit_debug(ejtag_info);
+	retval = mips_ejtag_exit_debug(ejtag_info);
+	if (retval != ERROR_OK)
+		return retval;
 
-	mips_m4k_debug_entry(target);
+	retval = mips_m4k_debug_entry(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	return ERROR_OK;
 }
@@ -520,6 +538,7 @@ static int mips_m4k_step(struct target *target, int current,
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 	struct breakpoint *breakpoint = NULL;
+	int retval;
 
 	if (target->state != TARGET_HALTED) {
 		LOG_WARNING("target not halted");
@@ -561,7 +580,9 @@ static int mips_m4k_step(struct target *target, int current,
 	register_cache_invalidate(mips32->core_cache);
 
 	LOG_DEBUG("target stepped ");
-	mips_m4k_debug_entry(target);
+	retval = mips_m4k_debug_entry(target);
+	if (retval != ERROR_OK)
+		return retval;
 
 	if (breakpoint)
 		mips_m4k_set_breakpoint(target, breakpoint);
@@ -937,7 +958,7 @@ static void mips_m4k_enable_watchpoints(struct target *target)
 }
 
 static int mips_m4k_read_memory(struct target *target, uint32_t address,
-		uint32_t size, uint32_t count, uint8_t *buffer)
+								uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
@@ -971,10 +992,14 @@ static int mips_m4k_read_memory(struct target *target, uint32_t address,
 
 	/* if noDMA off, use DMAACC mode for memory read */
 	int retval;
+#if 0
 	if (ejtag_info->impcode & EJTAG_IMP_NODMA)
 		retval = mips32_pracc_read_mem(ejtag_info, address, size, count, t);
 	else
 		retval = mips32_dmaacc_read_mem(ejtag_info, address, size, count, t);
+#else
+	retval = mips32_pracc_read_mem(ejtag_info, address, size, count, t);
+#endif
 
 	/* mips32_..._read_mem with size 4/2 returns uint32_t/uint16_t in host */
 	/* endianness, but byte array should represent target endianness       */
@@ -1011,8 +1036,14 @@ static int mips_m4k_write_memory(struct target *target, uint32_t address,
 
 	if (size == 4 && count > 32) {
 		int retval = mips_m4k_bulk_write_memory(target, address, count, buffer);
-		if (retval == ERROR_OK)
+		if (retval == ERROR_OK) {
 			return ERROR_OK;
+		}
+		else
+			if ((retval == ERROR_FAST_DOWNLOAD_FAILED) && 
+				(ejtag_info->scan_delay < MIPS32_SCAN_DELAY_LEGACY_MODE)) {
+				return retval;
+			}
 		LOG_WARNING("Falling back to non-bulk write");
 	}
 
@@ -1045,12 +1076,16 @@ static int mips_m4k_write_memory(struct target *target, uint32_t address,
 		buffer = t;
 	}
 
+	int retval;
+	retval = mips32_pracc_write_mem(ejtag_info, address, size, count, buffer);
+#if 0
 	/* if noDMA off, use DMAACC mode for memory write */
 	int retval;
 	if (ejtag_info->impcode & EJTAG_IMP_NODMA)
 		retval = mips32_pracc_write_mem(ejtag_info, address, size, count, buffer);
 	else
 		retval = mips32_dmaacc_write_mem(ejtag_info, address, size, count, buffer);
+#endif
 
 	if (t != NULL)
 		free(t);
@@ -1146,8 +1181,8 @@ static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
 		 * of about 3kb/sec when writing flash
 		 * this will be released/nulled by the system when the target is resumed or reset */
 		retval = target_alloc_working_area(target,
-				MIPS32_FASTDATA_HANDLER_SIZE,
-				&mips32->fast_data_area);
+										   MIPS32_FASTDATA_HANDLER_SIZE,
+										   &mips32->fast_data_area);
 		if (retval != ERROR_OK) {
 			LOG_ERROR("No working area available");
 			return retval;
@@ -1314,7 +1349,7 @@ COMMAND_HANDLER(mips_m4k_handle_scan_delay_command)
 			return ERROR_COMMAND_SYNTAX_ERROR;
 
 	command_print(CMD_CTX, "scan delay: %d nsec", ejtag_info->scan_delay);
-	if (ejtag_info->scan_delay >= 20000000) {
+	if (ejtag_info->scan_delay >= MIPS32_SCAN_DELAY_LEGACY_MODE) {
 		ejtag_info->mode = 0;
 		command_print(CMD_CTX, "running in legacy mode");
 	} else {

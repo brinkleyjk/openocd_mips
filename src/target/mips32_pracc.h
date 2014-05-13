@@ -69,6 +69,10 @@ int mips32_pracc_write_regs(struct mips_ejtag *ejtag_info, uint32_t *regs);
 
 int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_info *ctx, uint32_t *param_out);
 
+/* int mips32_pracc_exec(struct mips_ejtag *ejtag_info, int code_len, const uint32_t *code, */
+/*		int num_param_in, uint32_t *param_in, */
+/*		int num_param_out, uint32_t *param_out, int cycle); */
+
 /**
  * \b mips32_cp0_read
  *

@@ -107,7 +107,7 @@ static inline void buf_set_u64(void *_buffer,
  * @returns Up to 32-bits that were read from @c _buffer.
  */
 static inline uint32_t buf_get_u32(const void *_buffer,
-	unsigned first, unsigned num)
+								   unsigned first, unsigned num)
 {
 	const uint8_t *buffer = _buffer;
 
