@@ -3,7 +3,7 @@ Jim Tcl(n)
 
 NAME
 ----
-Jim Tcl v0.74 - reference manual for the Jim Tcl scripting language
+Jim Tcl v0.75 - reference manual for the Jim Tcl scripting language
 
 SYNOPSIS
 --------
@@ -51,10 +51,25 @@ Some notable differences with Tcl 8.5/8.6 are:
 
 RECENT CHANGES
 --------------
+Changes between 0.74 and 0.75
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. `binary`, `pack` and `unpack` now support floating point
+2. `file copy` '-force' handles source and target as the same file
+3. `format` now supports +%b+ for binary conversion
+4. `lsort` now supports '-unique' and '-real'
+5. Add support for half-close with `aio close` ?r|w?
+6. Add `socket pair` for a bidirectional pipe
+7. Add --random-hash to randomise hash tables for greater security
+8. `dict` now supports 'for', 'values', 'incr', 'append', 'lappend', 'update', 'info' and 'replace'
+9. `file stat` no longer requires the variable name
 
 Changes between 0.73 and 0.74
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 1. Numbers with leading zeros are treated as decimal, not octal
+2. Add `aio isatty`
+3. Add LFS (64 bit) support for `aio seek`, `aio tell`, `aio copyto`, `file copy`
+4. `string compare` and `string equal` now support '-length'
+5. `glob` now supports '-directory'
 
 Changes between 0.72 and 0.73
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1957,6 +1972,8 @@ command.  The legal +'options'+ are:
     explicitly unset). Note that changes to the contents of +'dictionaryName'+
     only happen when +'script'+ terminates.
 
++*dict for, values, incr, append, lappend, update, info, replace*+ to be documented...
+
 env
 ~~~
 +*env* '?name? ?default?'+
@@ -2320,12 +2337,9 @@ abbreviation for +'option'+ is acceptable.  The valid options are:
     If the file doesn't exist or its size cannot be queried then an
     error is generated.
 
-+*file stat* 'name varName'+::
-    Invoke the 'stat' kernel call on +'name'+, and use the
-    variable given by +'varName'+ to hold information returned from
-    the kernel call.
-    +'varName'+ is treated as an array variable,
-    and the following elements of that variable are set: 'atime',
++*file stat* 'name ?varName?'+::
+    Invoke the 'stat' kernel call on +'name'+, and return the result
+	as a dictionary with the following keys: 'atime',
     'ctime', 'dev', 'gid', 'ino', 'mode', 'mtime',
     'nlink', 'size', 'type', 'uid'.
     Each element except 'type' is a decimal string with the value of
@@ -2333,7 +2347,8 @@ abbreviation for +'option'+ is acceptable.  The valid options are:
     manual entry for 'stat' for details on the meanings of the values.
     The 'type' element gives the type of the file in the same form
     returned by the command `file type`.
-    This command returns an empty string.
+	If +'varName'+ is specified, it is taken to be the name of an array
+	variable and the values are also stored into the array.
 
 +*file tail* 'name'+::
     Return all of the characters in +'name'+ after the last slash.
@@ -2463,7 +2478,9 @@ before passing it to 'sprintf' for formatting.
 
 The only unusual conversion is for +%c+; in this case the argument
 must be a decimal string, which will then be converted to the corresponding
-ASCII character value.
+ASCII (or UTF-8) character value.
+
+In addition, Jim Tcl provides basic support for conversion to binary with +%b+.
 
 `format` does backslash substitution on its +'formatString'+
 argument, so backslash sequences in +'formatString'+ will be handled
@@ -3125,12 +3142,16 @@ the list are to be matched against pattern and must have one of the values below
 
 lsort
 ~~~~~
-+*lsort* ?*-index* 'listindex'? ?*-integer*|*-command* 'cmdname'? ?*-decreasing*|*-increasing*? 'list'+
++*lsort* ?*-index* 'listindex'? ?*-nocase!-integer|-real|-command* 'cmdname'? ?*-unique*? ?*-decreasing*|*-increasing*? 'list'+
 
 Sort the elements of +'list'+, returning a new list in sorted order.
-By default, ASCII sorting is used, with the result in increasing order.
+By default, ASCII (or UTF-8) sorting is used, with the result in increasing order.
+
+If +-nocase+ is specified, comparisons are case-insenstive.
 
 If +-integer+ is specified, numeric sorting is used.
+
+If +-real+ is specified, floating point number sorting is used.
 
 If +-command 'cmdname'+ is specified, +'cmdname'+ is treated as a command
 name. For each comparison, +'cmdname $value1 $value2+' is called which
@@ -3141,9 +3162,9 @@ than, equal to, or greater than +'$value2'+, respectively.
 If +-decreasing+ is specified, the resulting list is in the opposite
 order to what it would be otherwise. +-increasing+ is the default.
 
-If +-index 'listindex'+ is specified, each element of the list is treated as a list and
-the given index is extracted from the list for comparison. The list index may
-be any valid list index, such as +1+, +end+ or +end-2+.
+If +-unique+ is specified, then only the last set of duplicate elements found in the list will be retained.
+Note that duplicates are determined relative to the comparison used in the sort. Thus if +-index 0+ is used,
++{1 a}+ and +{1 b}+ would be considered duplicates and only the second element, +{1 b}+, would be retained.
 
 If +-index 'listindex'+ is specified, each element of the list is treated as a list and
 the given index is extracted from the list for comparison. The list index may
@@ -4404,66 +4425,65 @@ See `open` and `socket` for commands which return an I/O handle.
 
 aio
 ~~~
-+$handle *read ?-nonewline?* '?len?'+::
-    Read and return bytes from the stream. To eof if no len.
++$handle *accept*+::
+    Server socket only: Accept a connection and return stream
 
-+$handle *gets* '?var?'+::
-    Read one line and return it or store it in the var
++$handle *buffering none|line|full*+::
+    Sets the buffering mode of the stream.
 
-+$handle *puts ?-nonewline?* 'str'+::
-    Write the string, with newline unless -nonewline
++$handle *close* ?r(ead)|w(rite)?+::
+    Closes the stream. 
+	The  two-argument form is a "half-close" on a socket. See the +shutdown(2)+ man page.
 
 +$handle *copyto* 'tofd ?size?'+::
     Copy bytes to the file descriptor +'tofd'+. If +'size'+ is specified, at most
     that many bytes will be copied. Otherwise copying continues until the end
     of the input file. Returns the number of bytes actually copied.
 
-+$handle *flush*+::
-    Flush the stream
++$handle *eof*+::
+    Returns 1 if stream is at eof
 
 +$handle *filename*+::
     Returns the original filename associated with the handle.
     Handles returned by `socket` give the socket type instead of a filename.
 
-+$handle *eof*+::
-    Returns 1 if stream is at eof
++$handle *flush*+::
+    Flush the stream
 
-+$handle *close*+::
-    Closes the stream
++$handle *gets* '?var?'+::
+    Read one line and return it or store it in the var
 
-+$handle *seek* 'offset' *?start|current|end?*+::
-    Seeks in the stream (default 'current')
-
-+$handle *tell*+::
-    Returns the current seek position
-
-+$handle *filename*+::
-    Returns the original filename used when opening the file.
-    If the handle was returned from `socket`, the type of the
-    handle is returned instead.
++$handle *isatty*+::
+    Returns 1 if the stream is a tty device.
 
 +$handle *ndelay ?0|1?*+::
     Set O_NDELAY (if arg). Returns current/new setting.
     Note that in general ANSI I/O interacts badly with non-blocking I/O.
     Use with care.
 
-+$handle *buffering none|line|full*+::
-    Sets the buffering mode of the stream.
++$handle *puts ?-nonewline?* 'str'+::
+    Write the string, with newline unless -nonewline
 
-+$handle *accept*+::
-    Server socket only: Accept a connection and return stream
-
-+$handle *sendto* 'str ?hostname:?port'+::
-    Sends the string, +'str'+, to the given address via the socket using sendto(2).
-    This is intended for udp sockets and may give an error or behave in unintended
-    ways for other handle types.
-    Returns the number of bytes written.
++$handle *read ?-nonewline?* '?len?'+::
+    Read and return bytes from the stream. To eof if no len.
 
 +$handle *recvfrom* 'maxlen ?addrvar?'+::
     Receives a message from the handle via recvfrom(2) and returns it.
     At most +'maxlen'+ bytes are read.
     If +'addrvar'+ is specified, the sending address of the message is stored in
     the named variable in the form 'addr:port'. See `socket` for details.
+
++$handle *seek* 'offset' *?start|current|end?*+::
+    Seeks in the stream (default 'current')
+
++$handle *sendto* 'str ?addr:?port'+::
+    Sends the string, +'str'+, to the given address via the socket using sendto(2).
+    This is intended for udp/dgram sockets and may give an error or behave in unintended
+    ways for other handle types.
+    Returns the number of bytes written.
+
++$handle *tell*+::
+    Returns the current seek position
 
 fconfigure
 ~~~~~~~~~~
@@ -4537,13 +4557,15 @@ Time-based execution is also available via the eventloop API.
 
 Scripts are executed at the global scope. If an error occurs during a handler script,
 an attempt is made to call (the user-defined command) `bgerror` with the details of the error.
-If the `bgerror` commands does not exist, it is printed to stderr instead.
+If the `bgerror` command does not exist, the error message details are printed to stderr instead.
 
 If a file event handler script generates an error, the handler is automatically removed
 to prevent infinite errors. (A time event handler is always removed after execution).
 
-+*bgerror* 'error'+::
-    Called when an event handler script generates an error.
++*bgerror* 'msg'+::
+    Called when an event handler script generates an error. Note that the normal command resolution
+	rules are used for bgerror. First the name is resolved in the current namespace, then in the
+	global scope.
 
 socket
 ~~~~~~
@@ -4556,7 +4578,7 @@ Various socket types may be created.
     A unix domain socket server.
 
 +*socket ?-ipv6? stream* 'addr:port'+::
-    A TCP socket client.
+    A TCP socket client. (See the forms for +'addr'+ below)
 
 +*socket ?-ipv6? stream.server* '?addr:?port'+::
     A TCP socket server (+'addr'+ defaults to +0.0.0.0+ for IPv4 or +[::]+ for IPv6).
@@ -4572,6 +4594,10 @@ Various socket types may be created.
 +*socket pipe*+::
     A pipe. Note that unlike all other socket types, this command returns
     a list of two channels: {read write}
+
++*socket pair*+::
+    A socketpair (see socketpair(2)). Like `socket pipe`, this command returns
+    a list of two channels: {s1 s2}. These channels are both readable and writable.
 
 This command creates a socket connected (client) or bound (server) to the given
 address.
@@ -4657,21 +4683,22 @@ pack: pack, unpack
 ~~~~~~~~~~~~~~~~~~
 The optional 'pack' extension provides commands to encode and decode binary strings.
 
-+*pack* 'varName value' *-intle|-intbe|-str* 'bitwidth ?bitoffset?'+::
++*pack* 'varName value' *-intle|-intbe|-floatle|-floatbe|-str* 'bitwidth ?bitoffset?'+::
     Packs the binary representation of +'value'+ into the variable
     +'varName'+. The value is packed according to the given type
-    (integer/string, big-endian/little-endian), width and bit offset.
+    (integer/floating point/string, big-endian/little-endian), width and bit offset.
     The variable is created if necessary (like `append`).
     Ihe variable is expanded if necessary.
 
-+*unpack* 'binvalue' *-intbe|-intle|-uintbe|-uintle|-str* 'bitpos bitwidth'+::
++*unpack* 'binvalue' *-intbe|-intle|-uintbe|-uintle|-floatbe|-floatle|-str* 'bitpos bitwidth'+::
     Unpacks bits from +'binvalue'+ at bit position +'bitpos'+ and with +'bitwidth'+.
-    Interprets the value according to the type (integer/string, big-endian/little-endian
+    Interprets the value according to the type (integer/floating point/string, big-endian/little-endian
     and signed/unsigned) and returns it. For integer types, +'bitwidth'+
-    may be up to the size of a Jim Tcl integer (typically 64 bits). For the string type,
-    both the width and the offset must be on a byte boundary (multiple of 8). Attempting to
-    access outside the length of the value will return 0 for integer types or the empty string
-    for the string type.
+    may be up to the size of a Jim Tcl integer (typically 64 bits). For floating point types,
+    +'bitwidth'+ may be 32 bits (for single precision numbers) or 64 bits (for double precision).
+    For the string type, both the width and the offset must be on a byte boundary (multiple of 8). Attempting to
+    access outside the length of the value will return 0 for integer types, 0.0 for floating point types
+    or the empty string for the string type.
 
 binary
 ~~~~~~
@@ -4680,7 +4707,8 @@ commands based on the low-level `pack` and `unpack` commands.
 
 See the Tcl documentation at: http://www.tcl.tk/man/tcl8.5/TclCmd/binary.htm
 
-Note that packing and unpacking of floating point values is not supported.
+Note that 'binary format' with f/r/R specifiers (single-precision float) uses the value of Infinity
+ in case of overflow.
 
 oo: class, super
 ~~~~~~~~~~~~~~~~

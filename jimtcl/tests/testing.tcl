@@ -1,6 +1,7 @@
 # Common code
 set testinfo(verbose) 0
 set testinfo(numpass) 0
+set testinfo(stoponerror) 0
 set testinfo(numfail) 0
 set testinfo(numskip) 0
 set testinfo(numtests) 0
@@ -11,6 +12,9 @@ set bindir [file dirname [info nameofexecutable]]
 
 if {[lsearch $argv "-verbose"] >= 0 || [info exists env(testverbose)]} {
 	incr testinfo(verbose)
+}
+if {[lsearch $argv "-stoponerror"] >= 0 || [info exists env(stoponerror)]} {
+	incr testinfo(stoponerror)
 }
 
 proc needs {type what {packages {}}} {
@@ -70,6 +74,7 @@ lappend auto_path $testdir $bindir [file dirname [pwd]]
 # For Jim, this is reasonable compatible tcltest
 proc makeFile {contents name} {
 	set f [open $name w]
+	stdout puts "About to 'puts $f $contents'"
 	puts $f $contents
 	close $f
 	return $name
@@ -77,6 +82,23 @@ proc makeFile {contents name} {
 
 proc removeFile {name} {
 	file delete $name
+}
+
+# In case tclcompat is not selected
+if {![exists -proc puts]} {
+	proc puts {{-nonewline {}} {chan stdout} msg} {
+		if {${-nonewline} ni {-nonewline {}}} {
+			${-nonewline} puts $msg
+		} else {
+			$chan puts {*}${-nonewline} $msg
+		}
+	}
+	proc close {chan args} {
+		$chan close {*}$args
+	}
+	proc fileevent {args} {
+		{*}$args
+	}
 }
 
 proc script_source {script} {
@@ -194,6 +216,9 @@ proc test {id descr args} {
 	puts ""
 	incr ::testinfo(numfail)
 	lappend ::testinfo(failed) [list $id $descr $source $expected $result]
+	if {$::testinfo(stoponerror)} {
+		exit 1
+	}
 }
 
 proc ::tcltest::cleanupTests {} {
