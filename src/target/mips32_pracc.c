@@ -1514,6 +1514,9 @@ int mips32_pracc_invalidate_cache (struct target *target, struct mips_ejtag *ejt
 	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, NULL);
 	
 exit:
+	if (mips32->fast_data_area != NULL)
+		target_free_working_area(target, mips32->fast_data_area);
+
     pracc_queue_free(&ctx);
     return ctx.retval;
 }
@@ -1671,8 +1674,12 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
     int retval, i;
     uint32_t val, ejtag_ctrl, address;
 
-    if (source->size < MIPS32_FASTDATA_HANDLER_SIZE)
+	LOG_DEBUG("mips32_pracc_fastdata_xfer");
+
+    if (source->size < MIPS32_FASTDATA_HANDLER_SIZE) {
+		LOG_ERROR ("source->size (%x) < MIPS32_FASTDATA_HANDLER_SIZE", source->size);
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
 
     if (write_t) {
 		handler_code[8] = MIPS32_LW(11, 0, 8);	/* load data from probe at fastdata area */
@@ -1716,7 +1723,7 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
     retval = wait_for_pracc_rw(ejtag_info, &ejtag_ctrl);
     if (retval != ERROR_OK)
 	{
-		LOG_INFO ("wait_for_pracc_rw 1");
+		LOG_ERROR ("wait_for_pracc_rw failed");
 		return retval;
 	}
 
@@ -1726,13 +1733,13 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
     retval = mips_ejtag_drscan_32(ejtag_info, &address);
     if (retval != ERROR_OK)
 	{
-		LOG_INFO ("mips_ejtag_drscan_32 0");
+		LOG_ERROR ("mips_ejtag_drscan_32 failed");
 		return retval;
 	}
 
     if (address != MIPS32_PRACC_FASTDATA_AREA)
 	{
-		LOG_INFO ("address != MIPS32_PRACC_FASTDATA_AREA - 0x%8.8x", address);
+		LOG_ERROR ("address != MIPS32_PRACC_FASTDATA_AREA - 0x%8.8x", address);
 		return ERROR_FAIL;
 	}
 
@@ -1744,7 +1751,7 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
     retval = wait_for_pracc_rw(ejtag_info, &ejtag_ctrl);
     if (retval != ERROR_OK)
 	{
-		LOG_INFO ("wait_for_pracc_rw 3");
+		LOG_ERROR ("wait_for_pracc_rw failed");
 		return retval;
 	}
 
@@ -1762,7 +1769,7 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
 		jtag_add_clocks(num_clocks);
 		retval = mips_ejtag_fastdata_scan(ejtag_info, write_t, buf++);
 		if (retval != ERROR_OK) {
-			LOG_INFO ("mips_ejtag_fastdata_scan falied");
+			LOG_ERROR ("mips_ejtag_fastdata_scan falied");
 			return retval;
 		}
     }
