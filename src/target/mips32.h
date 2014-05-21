@@ -123,6 +123,215 @@ struct mips32_algorithm {
 	enum mips32_isa_mode isa_mode;
 };
 
+#define zero	0
+
+#define AT	1
+
+#define v0 	2
+#define v1	3
+
+#define a0	4
+#define a1	5
+#define a2	6
+#define	a3	7
+#define t0	8
+#define t1	9
+#define t2	10
+#define t3	11
+#define t4	12
+#define t5	13
+#define t6	14
+#define t7	15
+#define ta0	12	/* alias for $t4 */
+#define ta1	13	/* alias for $t5 */
+#define ta2	14	/* alias for $t6 */
+#define ta3	15	/* alias for $t7 */
+
+#define s0	16
+#define s1	17
+#define s2	18
+#define s3	19
+#define s4	20
+#define s5	21
+#define s6	22
+#define s7	23
+#define s8	30		/* == fp */
+
+#define t8	24
+#define t9	25
+#define k0	26
+#define k1	27
+
+#define gp	28
+
+#define sp	29
+#define fp	30
+#define ra	31
+
+#define ALL 0
+#define INST 1
+#define DATA 2
+#define ALLNOWB 3
+#define DATANOWB 4
+
+/*
+ * MIPS32 Config0 Register  (CP0 Register 16, Select 0)
+ */
+#define CFG0_M          0x80000000      /* Config1 implemented */
+#define CFG0_BE         0x00008000      /* Big Endian */
+#define CFG0_ATMASK     0x00006000      /* Architecture type: */
+#define  CFG0_AT_M32     (0<<13)         /* MIPS32 */
+#define  CFG0_AT_M64_A32 (1<<13)         /* MIPS64, 32-bit addresses */
+#define  CFG0_AT_M64_A64 (2<<13)         /* MIPS64, 64-bit addresses */
+#define  CFG0_AT_RES     (3<<13)
+#define CFG0_ARMASK     0x00001c00
+#define CFG0_ARSHIFT    10
+#define CFG0_MTMASK     0x00000380
+#define  CFG0_MT_NONE    (0<<7)
+#define  CFG0_MT_TLB     (1<<7)
+#define  CFG0_MT_BAT     (2<<7)
+#define  CFG0_MT_NONSTD  (3<<7)
+#define CFG0_VI         0x00000008      /* Icache is virtual */
+#define CFG0_K0MASK     0x00000007      /* KSEG0 coherency algorithm */
+
+/*
+ * MIPS32 Config1 Register (CP0 Register 16, Select 1)
+ */
+#define CFG1_M          0x80000000      /* Config2 implemented */
+#define CFG1_MMUSMASK   0x7e000000      /* mmu size - 1 */
+#define CFG1_MMUSSHIFT  25
+#define CFG1_ISMASK     0x01c00000      /* icache lines 64<<n */
+#define CFG1_ISSHIFT    22
+#define CFG1_ILMASK     0x00380000      /* icache line size 2<<n */
+#define CFG1_ILSHIFT    19
+#define CFG1_IAMASK     0x00070000      /* icache ways - 1 */
+#define CFG1_IASHIFT    16
+#define CFG1_DSMASK     0x0000e000      /* dcache lines 64<<n */
+#define CFG1_DSSHIFT    13
+#define CFG1_DLMASK     0x00001c00      /* dcache line size 2<<n */
+#define CFG1_DLSHIFT    10
+
+/*
+ * MIPS32 Config1 Register (CP0 Register 16, Select 1)
+ */
+#define CFG1_M          0x80000000      /* Config2 implemented */
+#define CFG1_MMUSMASK   0x7e000000      /* mmu size - 1 */
+#define CFG1_MMUSSHIFT  25
+#define CFG1_ISMASK     0x01c00000      /* icache lines 64<<n */
+#define CFG1_ISSHIFT    22
+#define CFG1_ILMASK     0x00380000      /* icache line size 2<<n */
+#define CFG1_ILSHIFT    19
+#define CFG1_IAMASK     0x00070000      /* icache ways - 1 */
+#define CFG1_IASHIFT    16
+#define CFG1_DSMASK     0x0000e000      /* dcache lines 64<<n */
+#define CFG1_DSSHIFT    13
+#define CFG1_DLMASK     0x00001c00      /* dcache line size 2<<n */
+#define CFG1_DLSHIFT    10
+#define CFG1_DAMASK     0x00000380      /* dcache ways - 1 */
+#define CFG1_DASHIFT    7
+#define CFG1_C2         0x00000040      /* Coprocessor 2 present */
+#define CFG1_MD         0x00000020      /* MDMX implemented */
+#define CFG1_PC         0x00000010      /* performance counters implemented */
+#define CFG1_WR         0x00000008      /* watch registers implemented */
+#define CFG1_CA         0x00000004      /* compression (mips16) implemented */
+#define CFG1_EP         0x00000002      /* ejtag implemented */
+#define CFG1_FP         0x00000001      /* fpu implemented */
+
+/*
+ * MIPS32r2 Config2 Register (CP0 Register 16, Select 2)
+ */
+#define CFG2_M          0x80000000      /* Config3 implemented */
+#define CFG2_TUMASK     0x70000000      /* tertiary cache control */
+#define CFG2_TUSHIFT    28
+#define CFG2_TSMASK     0x0f000000      /* tcache sets per wway 64<<n */
+#define CFG2_TSSHIFT    24
+#define CFG2_TLMASK     0x00f00000      /* tcache line size 2<<n */
+#define CFG2_TLSHIFT    20
+#define CFG2_TAMASK     0x000f0000      /* tcache ways - 1 */
+#define CFG2_TASHIFT    16
+#define CFG2_SUMASK     0x0000f000      /* secondary cache control */
+#define CFG2_SUSHIFT    12
+#define CFG2_SSMASK     0x00000f00      /* scache sets per wway 64<<n */
+#define CFG2_SSSHIFT    8
+#define CFG2_SLMASK     0x000000f0      /* scache line size 2<<n */
+#define CFG2_SLSHIFT    4
+#define CFG2_SAMASK     0x0000000f      /* scache ways - 1 */
+#define CFG2_SASHIFT    0
+
+/*
+ * MIPS32r2 Config3 Register (CP0 Register 16, Select 3)
+ */
+#define CFG3_M          0x80000000      /* Config4 implemented */
+#define CFG3_ISAONEXC   0x00010000      /* ISA mode on exception entry */
+#define CFG3_DSPP       0x00000400      /* DSP ASE present */
+#define CFG3_LPA        0x00000080      /* Large physical addresses */
+#define CFG3_VEIC       0x00000040      /* Vectored external i/u controller */
+#define CFG3_VI         0x00000020      /* Vectored i/us */
+#define CFG3_SP         0x00000010      /* Small page support */
+#define CFG3_MT         0x00000004      /* MT ASE present */
+#define CFG3_SM         0x00000002      /* SmartMIPS ASE */
+#define CFG3_TL         0x00000001      /* Trace Logic */
+
+/*
+ * MIPS32 Coprocessor 0 register numbers
+ */
+#define C0_INDEX        0
+#define C0_INX          0
+#define C0_RANDOM       1
+#define C0_RAND         1
+#define C0_ENTRYLO0     2
+#define C0_TLBLO0       2
+#define C0_ENTRYLO1     3
+#define C0_TLBLO1       3
+#define C0_CONTEXT      4
+#define C0_CTXT         4
+#define C0_PAGEMASK     5
+#define C0_PAGEGRAIN    5,1
+#define C0_WIRED        6
+#define C0_HWRENA       7
+#define C0_BADVADDR     8
+#define C0_VADDR        8
+#define C0_COUNT        9
+#define C0_ENTRYHI      10
+#define C0_TLBHI        10
+#define C0_COMPARE      11
+#define C0_STATUS       12
+#define C0_SR           12
+#define C0_INTCTL       12,1
+#define C0_SRSCTL       12,2
+#define C0_SRSMAP       12,3
+#define C0_CAUSE        13
+#define C0_CR           13
+#define C0_EPC          14
+#define C0_PRID         15
+#define C0_EBASE        15,1
+#define C0_CONFIG       16
+#define C0_CONFIG0      16,0
+#define C0_CONFIG1      16,1
+#define C0_CONFIG2      16,2
+#define C0_CONFIG3      16,3
+#define C0_LLADDR       17
+#define C0_WATCHLO      18
+#define C0_WATCHHI      19
+#define C0_DEBUG        23
+#define C0_DEPC         24
+#define C0_PERFCNT      25
+#define C0_ERRCTL       26
+#define C0_CACHEERR     27
+#define C0_TAGLO        28
+#define C0_ITAGLO       28
+#define C0_DTAGLO       28,2
+#define C0_TAGLO2       28,4
+#define C0_DATALO       28,1
+#define C0_IDATALO      28,1
+#define C0_DDATALO      28,3
+#define C0_DATALO2      28,5
+#define C0_TAGHI        29
+#define C0_ITAGHI		29
+#define C0_DATAHI       29,1
+#define C0_ERRPC        30
+#define C0_DESAVE       31
+
 #define MIPS32_OP_ADDIU 0x21
 #define MIPS32_OP_ANDI	0x0C
 #define MIPS32_OP_BEQ	0x04
@@ -132,7 +341,8 @@ struct mips32_algorithm {
 #define MIPS32_OP_AND	0x24
 #define MIPS32_OP_CACHE	0x2F
 #define MIPS32_OP_COP0	0x10
-#define MIPS32_OP_J	0x02
+#define MIPS32_OP_EXT   0x1F
+#define MIPS32_OP_J		0x02
 #define MIPS32_OP_JR	0x08
 #define MIPS32_OP_LUI	0x0F
 #define MIPS32_OP_LW	0x23
@@ -141,6 +351,7 @@ struct mips32_algorithm {
 #define MIPS32_OP_MFHI	0x10
 #define MIPS32_OP_MTHI	0x11
 #define MIPS32_OP_MFLO	0x12
+#define MIPS32_OP_MUL   0x2
 #define MIPS32_OP_MTLO	0x13
 #define MIPS32_OP_RDHWR 0x3B
 #define MIPS32_OP_SB	0x28
@@ -150,6 +361,7 @@ struct mips32_algorithm {
 #define MIPS32_OP_XORI	0x0E
 #define MIPS32_OP_XOR	0x26
 #define MIPS32_OP_SLTU  0x2B
+#define MIPS32_OP_SLLV  0x04
 #define MIPS32_OP_SRL	0x03
 #define MIPS32_OP_SYNCI	0x1F
 
@@ -169,7 +381,9 @@ struct mips32_algorithm {
 #define MIPS32_J_INST(opcode, addr)	(((opcode) << 26) | (addr))
 
 #define MIPS32_NOP						0
+#define MIPS32_ADD(dst, src, tar)		MIPS32_R_INST(0, src, tar, dst,0, 32)
 #define MIPS32_ADDI(tar, src, val)		MIPS32_I_INST(MIPS32_OP_ADDI, src, tar, val)
+#define MIPS32_ADDIU(tar, src, val)		MIPS32_I_INST(9, src, tar, val)
 #define MIPS32_ADDU(dst, src, tar)		MIPS32_R_INST(MIPS32_OP_SPECIAL, src, tar, dst, 0, MIPS32_OP_ADDIU)
 #define MIPS32_AND(reg, off, val)		MIPS32_R_INST(0, off, val, reg, 0, MIPS32_OP_AND)
 #define MIPS32_ANDI(tar, src, val)		MIPS32_I_INST(MIPS32_OP_ANDI, src, tar, val)
@@ -178,9 +392,11 @@ struct mips32_algorithm {
 #define MIPS32_BGTZ(reg, off)			MIPS32_I_INST(MIPS32_OP_BGTZ, reg, 0, off)
 #define MIPS32_BNE(src, tar, off)		MIPS32_I_INST(MIPS32_OP_BNE, src, tar, off)
 #define MIPS32_CACHE(op, off, base)		MIPS32_I_INST(MIPS32_OP_CACHE, base, op, off)
-#define MIPS32_J(tar)				MIPS32_J_INST(MIPS32_OP_J, tar)
+#define MIPS32_EXT(dst, src, shf, sz)	MIPS32_R_INST(MIPS32_OP_EXT, src, dst, (sz-1), shf, 0)
+#define MIPS32_J(tar)				    MIPS32_J_INST(MIPS32_OP_J, tar)
 #define MIPS32_JR(reg)					MIPS32_R_INST(0, reg, 0, 0, 0, MIPS32_OP_JR)
 #define MIPS32_MFC0(gpr, cpr, sel)		MIPS32_R_INST(MIPS32_OP_COP0, MIPS32_COP0_MF, gpr, cpr, 0, sel)
+#define MIPS32_MOVE(dst, src)			MIPS32_R_INST(17, 16, 0, src, dst, 6)
 #define MIPS32_MTC0(gpr, cpr, sel)		MIPS32_R_INST(MIPS32_OP_COP0, MIPS32_COP0_MT, gpr, cpr, 0, sel)
 #define MIPS32_LBU(reg, off, base)		MIPS32_I_INST(MIPS32_OP_LBU, base, reg, off)
 #define MIPS32_LHU(reg, off, base)		MIPS32_I_INST(MIPS32_OP_LHU, base, reg, off)
@@ -190,6 +406,8 @@ struct mips32_algorithm {
 #define MIPS32_MFHI(reg)				MIPS32_R_INST(0, 0, 0, reg, 0, MIPS32_OP_MFHI)
 #define MIPS32_MTLO(reg)				MIPS32_R_INST(0, reg, 0, 0, 0, MIPS32_OP_MTLO)
 #define MIPS32_MTHI(reg)				MIPS32_R_INST(0, reg, 0, 0, 0, MIPS32_OP_MTHI)
+#define MIPS32_MUL(dst, src, t)			MIPS32_R_INST(28, src, t, dst, 0, MIPS32_OP_MUL)
+#define MIPS32_OR(dst, src, val)		MIPS32_R_INST(0, src, val, dst, 0, 37)
 #define MIPS32_ORI(tar, src, val)		MIPS32_I_INST(MIPS32_OP_ORI, src, tar, val)
 #define MIPS32_XORI(tar, src, val)		MIPS32_I_INST(MIPS32_OP_XORI, src, tar, val)
 #define MIPS32_RDHWR(tar, dst)			MIPS32_R_INST(MIPS32_OP_SPECIAL3, 0, tar, dst, 0, MIPS32_OP_RDHWR)
@@ -198,7 +416,8 @@ struct mips32_algorithm {
 #define MIPS32_SW(reg, off, base)		MIPS32_I_INST(MIPS32_OP_SW, base, reg, off)
 #define MIPS32_XOR(reg, val1, val2)		MIPS32_R_INST(0, val1, val2, reg, 0, MIPS32_OP_XOR)
 #define MIPS32_SRL(reg, src, off)		MIPS32_R_INST(0, 0, src, reg, off, MIPS32_OP_SRL)
-#define MIPS32_SLTU(dst, src, tar)		MIPS32_R_INST(MIPS32_OP_SPECIAL, src, tar, dst, 0, MIPS32_OP_SLTU)
+#define MIPS32_SLTU(dst, tar, src)		MIPS32_R_INST(MIPS32_OP_SPECIAL, src, tar, dst, 0, MIPS32_OP_SLTU)
+#define MIPS32_SLLV(dst, tar, src)		MIPS32_R_INST(MIPS32_OP_SPECIAL, src, tar, dst, 0, MIPS32_OP_SLLV)
 #define MIPS32_SYNCI(off, base)			MIPS32_I_INST(MIPS32_OP_REGIMM, base, MIPS32_OP_SYNCI, off)
 
 #define MIPS32_SYNC			0xF

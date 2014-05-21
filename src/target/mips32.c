@@ -43,11 +43,11 @@ static const struct {
     unsigned option;
     const char *arg;
 } invalidate_cmd[5] = {
-    { 0, "all", },
-    { 1, "inst", },
-    { 2, "data", },
-    { 3, "allnowb", },
-    { 4, "datanowb", },
+    { ALL, "all", },
+    { INST, "inst", },
+    { DATA, "data", },
+    { ALLNOWB, "allnowb", },
+    { DATANOWB, "datanowb", },
 };
 
 static const struct {
@@ -119,7 +119,7 @@ static int mips32_get_core_reg(struct reg *reg)
     struct mips32_common *mips32_target = target_to_mips32(target);
 
     if (target->state != TARGET_HALTED)
-	return ERROR_TARGET_NOT_HALTED;
+		return ERROR_TARGET_NOT_HALTED;
 
     retval = mips32_target->read_core_reg(target, mips32_reg->num);
 
@@ -133,7 +133,7 @@ static int mips32_set_core_reg(struct reg *reg, uint8_t *buf)
     uint32_t value = buf_get_u32(buf, 0, 32);
 
     if (target->state != TARGET_HALTED)
-	return ERROR_TARGET_NOT_HALTED;
+		return ERROR_TARGET_NOT_HALTED;
 
     buf_set_u32(reg->value, 0, 32, value);
     reg->dirty = 1;
@@ -334,18 +334,18 @@ static int mips32_run_and_wait(struct target *target, uint32_t entry_point,
     retval = target_wait_state(target, TARGET_HALTED, timeout_ms);
     /* If the target fails to halt due to the breakpoint, force a halt */
     if (retval != ERROR_OK || target->state != TARGET_HALTED) {
-	retval = target_halt(target);
-	if (retval != ERROR_OK)
-	    return retval;
-	retval = target_wait_state(target, TARGET_HALTED, 500);
-	if (retval != ERROR_OK)
-	    return retval;
-	return ERROR_TARGET_TIMEOUT;
+		retval = target_halt(target);
+		if (retval != ERROR_OK)
+			return retval;
+		retval = target_wait_state(target, TARGET_HALTED, 500);
+		if (retval != ERROR_OK)
+			return retval;
+		return ERROR_TARGET_TIMEOUT;
     }
 
     pc = buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32);
     if (exit_point && (pc != exit_point)) {
-	LOG_DEBUG("failed algorithm halted at 0x%" PRIx32 " ", pc);
+		LOG_DEBUG("failed algorithm halted at 0x%" PRIx32 " ", pc);
 	return ERROR_TARGET_TIMEOUT;
     }
 
@@ -384,6 +384,7 @@ int mips32_run_algorithm(struct target *target, int num_mem_params,
     for (i = 0; i < MIPS32NUMCOREREGS; i++) {
 		if (!mips32->core_cache->reg_list[i].valid)
 			mips32->read_core_reg(target, i);
+
 		context[i] = buf_get_u32(mips32->core_cache->reg_list[i].value, 0, 32);
     }
 
@@ -405,6 +406,7 @@ int mips32_run_algorithm(struct target *target, int num_mem_params,
 	if (reg->size != reg_params[i].size) {
 	    LOG_ERROR("BUG: register '%s' size doesn't match reg_params[i].size",
 		      reg_params[i].reg_name);
+
 	    return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
@@ -840,48 +842,58 @@ COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
     struct target *target = get_current_target(CMD_CTX);
     struct mips32_common *mips32 = target_to_mips32(target);
     struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+	int i = 0;
+
+    if (target->state != TARGET_HALTED){
+		LOG_WARNING("target not halted");
+		return ERROR_TARGET_NOT_HALTED;
+	}
 
 	if (CMD_ARGC >= 2)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
     if (CMD_ARGC == 1) {
 		/* PARSE command options - all/inst/data/allnowb/datanowb */
-		for (int i = 0; i < 5 ; i++) {
+		for (i = 0; i < 5 ; i++) {
 			if (strcmp(CMD_ARGV[0], invalidate_cmd[i].arg) == 0){
 				switch (invalidate_cmd[i].option) {
-					case 0:
+					case ALL:
 						LOG_INFO ("all");
 						retval = ERROR_OK;
 						break;
-					case 1:
+					case INST:
 						LOG_INFO ("inst");
 						retval = ERROR_OK;
 						break;
-					case 2:
+					case DATA:
 						LOG_INFO ("data");
 						retval = ERROR_OK;
 						break;
-					case 3:
-						LOG_INFO ("allnowb");
+					case ALLNOWB:
+						LOG_INFO ("allnowb - not coded yet!");
 						retval = ERROR_OK;
 						break;
-					case 4:
-						LOG_INFO ("datanowb");
+					case DATANOWB:
+						LOG_INFO ("datanowb - not coded yet!");
 						retval = ERROR_OK;
 						break;
 					default:
 						retval = ERROR_FAIL;
 				}
-
-				if (retval == -1)
+				if (retval == ERROR_FAIL)
 					return ERROR_FAIL;
 			}
 			if (retval == -1)
 				return ERROR_FAIL;
+			else
+				break;
 		}
 	} else {
-		LOG_INFO ("invalidate cache");
+		LOG_INFO ("invalidate cache all");
+		i = 0;
 	}
+
+	mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[i].option);
 
 	return ERROR_OK;
 }

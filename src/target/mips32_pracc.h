@@ -51,6 +51,8 @@ struct pracc_queue_info {
 	int store_count;
 	uint32_t *pracc_list;	/* Code and store addresses */
 };
+
+int mips32_pracc_invalidate_cache (struct target *, struct mips_ejtag *, uint32_t, int, int, int);
 void pracc_queue_init(struct pracc_queue_info *ctx);
 void pracc_add(struct pracc_queue_info *ctx, uint32_t addr, uint32_t instr);
 void pracc_queue_free(struct pracc_queue_info *ctx);
