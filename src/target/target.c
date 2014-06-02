@@ -2,7 +2,7 @@
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
  *                                                                         *
- *   Copyright (C) 2007-2010 Øyvind Harboe                                 *
+ *   Copyright (C) 2007-2010 Øyvind Harboe                             *
  *   oyvind.harboe@zylin.com                                               *
  *                                                                         *
  *   Copyright (C) 2008, Duane Ellis                                       *
@@ -2036,8 +2036,7 @@ int target_read_u64(struct target *target, uint64_t address, uint64_t *value)
 	if (retval == ERROR_OK) {
 		*value = target_buffer_get_u64(target, value_buf);
 		LOG_DEBUG("address: 0x%" PRIx64 ", value: 0x%16.16" PRIx64 "",
-				  address,
-				  *value);
+				  address, *value);
 	} else {
 		*value = 0x0;
 		LOG_DEBUG("address: 0x%" PRIx64 " failed",
@@ -3134,7 +3133,7 @@ static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
 	}
 
 	struct duration bench;
-	duration_start(&bench);
+//	duration_start(&bench);
 
 	if (CMD_ARGC >= 2) {
 		uint32_t addr;
@@ -3151,6 +3150,8 @@ static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
 	retval = image_open(&image, CMD_ARGV[0], (CMD_ARGC == 3) ? CMD_ARGV[2] : NULL);
 	if (retval != ERROR_OK)
 		return retval;
+
+	duration_start(&bench);
 
 	image_size = 0x0;
 	int diffs = 0;
@@ -3199,6 +3200,7 @@ static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
 					size *= 4;
 					count /= 4;
 				}
+
 				retval = target_read_memory(target, image.sections[i].base_address, size, count, data);
 				if (retval == ERROR_OK) {
 					uint32_t t;
@@ -5712,7 +5714,7 @@ COMMAND_HANDLER(handle_test_mem_access_command)
 					read_buf[i] = read_ref[i];
 				}
 				command_print_sameline(CMD_CTX,
-						"Test read %" PRIu32 " x %d @ %d to %saligned buffer: ", count,
+						"Test read %d x %d @ %d to %saligned buffer: ", count,
 						size, offset, host_offset ? "un" : "");
 
 				struct duration bench;
@@ -5784,7 +5786,7 @@ out:
 				for (size_t i = 0; i < host_bufsiz; i++)
 					write_buf[i] = rand();
 				command_print_sameline(CMD_CTX,
-						"Test write %" PRIu32 " x %d @ %d from %saligned buffer: ", count,
+						"Test write %d x %d @ %d from %saligned buffer: ", count,
 						size, offset, host_offset ? "un" : "");
 
 				retval = target_write_memory(target, wa->address, 1, num_bytes, test_pattern);

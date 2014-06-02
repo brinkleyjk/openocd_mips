@@ -173,6 +173,7 @@ struct mips32_algorithm {
 #define DATA 2
 #define ALLNOWB 3
 #define DATANOWB 4
+#define L2 5
 
 /*
  * MIPS32 Config0 Register  (CP0 Register 16, Select 0)
@@ -180,17 +181,17 @@ struct mips32_algorithm {
 #define CFG0_M          0x80000000      /* Config1 implemented */
 #define CFG0_BE         0x00008000      /* Big Endian */
 #define CFG0_ATMASK     0x00006000      /* Architecture type: */
-#define  CFG0_AT_M32     (0<<13)         /* MIPS32 */
-#define  CFG0_AT_M64_A32 (1<<13)         /* MIPS64, 32-bit addresses */
-#define  CFG0_AT_M64_A64 (2<<13)         /* MIPS64, 64-bit addresses */
-#define  CFG0_AT_RES     (3<<13)
+#define CFG0_AT_M32     (0<<13)         /* MIPS32 */
+#define CFG0_AT_M64_A32 (1<<13)         /* MIPS64, 32-bit addresses */
+#define CFG0_AT_M64_A64 (2<<13)         /* MIPS64, 64-bit addresses */
+#define CFG0_AT_RES     (3<<13)
 #define CFG0_ARMASK     0x00001c00
 #define CFG0_ARSHIFT    10
 #define CFG0_MTMASK     0x00000380
-#define  CFG0_MT_NONE    (0<<7)
-#define  CFG0_MT_TLB     (1<<7)
-#define  CFG0_MT_BAT     (2<<7)
-#define  CFG0_MT_NONSTD  (3<<7)
+#define CFG0_MT_NONE    (0<<7)
+#define CFG0_MT_TLB     (1<<7)
+#define CFG0_MT_BAT     (2<<7)
+#define CFG0_MT_NONSTD  (3<<7)
 #define CFG0_VI         0x00000008      /* Icache is virtual */
 #define CFG0_K0MASK     0x00000007      /* KSEG0 coherency algorithm */
 
@@ -271,6 +272,35 @@ struct mips32_algorithm {
 #define CFG3_MT         0x00000004      /* MT ASE present */
 #define CFG3_SM         0x00000002      /* SmartMIPS ASE */
 #define CFG3_TL         0x00000001      /* Trace Logic */
+
+/*
+ * Cache operations
+ */
+#define Index_Invalidate_I               0x00        /* 0       0 */
+#define Index_Writeback_Inv_D            0x01        /* 0       1 */
+#define Index_Writeback_Inv_T            0x02        /* 0       2 */
+#define Index_Writeback_Inv_S            0x03        /* 0       3 */
+#define Index_Load_Tag_I                 0x04        /* 1       0 */
+#define Index_Load_Tag_D                 0x05        /* 1       1 */
+#define Index_Load_Tag_T                 0x06        /* 1       2 */
+#define Index_Load_Tag_S                 0x07        /* 1       3 */
+#define Index_Store_Tag_I                0x08        /* 2       0 */
+#define Index_Store_Tag_D                0x09        /* 2       1 */
+#define Index_Store_Tag_T                0x0A        /* 2       2 */
+#define Index_Store_Tag_S                0x0B        /* 2       3 */
+#define Hit_Invalidate_I                 0x10        /* 4       0 */
+#define Hit_Invalidate_D                 0x11        /* 4       1 */
+#define Hit_Invalidate_T                 0x12        /* 4       2 */
+#define Hit_Invalidate_S                 0x13        /* 4       3 */
+#define Fill_I                           0x14        /* 5       0 */
+#define Hit_Writeback_Inv_D              0x15        /* 5       1 */
+#define Hit_Writeback_Inv_T              0x16        /* 5       2 */
+#define Hit_Writeback_Inv_S              0x17        /* 5       3 */
+#define Hit_Writeback_D                  0x19        /* 6       1 */
+#define Hit_Writeback_T                  0x1A        /* 6       1 */
+#define Hit_Writeback_S                  0x1B        /* 6       3 */
+#define Fetch_Lock_I                     0x1C        /* 7       0 */
+#define Fetch_Lock_D                     0x1D        /* 7       1 */
 
 /*
  * MIPS32 Coprocessor 0 register numbers

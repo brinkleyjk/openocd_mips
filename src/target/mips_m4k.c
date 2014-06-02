@@ -116,12 +116,13 @@ static int mips_m4k_debug_entry(struct target *target)
 
 	/* default to mips32 isa, it will be changed below if required */
 	mips32->isa_mode = MIPS32_ISA_MIPS32;
-
+	LOG_INFO ("ejtag_info->impcode: 0x%8.8x EJTAG_IMP_MIPS16: 0x%8.8x", ejtag_info->impcode, EJTAG_IMP_MIPS16);
 	if (ejtag_info->impcode & EJTAG_IMP_MIPS16) {
+		LOG_INFO ("EJTAG_IMP_MIPS16");
 		mips32->isa_mode = buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 1);
 	}
 
-	LOG_DEBUG("entered debug state at PC 0x%" PRIx32 ", target->state: %s",
+	LOG_INFO ("entered debug state at PC 0x%" PRIx32 ", target->state: %s",
 			  buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32),
 			  target_state_name(target));
 
@@ -199,8 +200,10 @@ static int mips_m4k_poll(struct target *target)
 	/* read ejtag control reg */
 	mips_ejtag_set_instr(ejtag_info, EJTAG_INST_CONTROL);
 	retval = mips_ejtag_drscan_32(ejtag_info, &ejtag_ctrl);
-	if (retval != ERROR_OK)
+	if (retval != ERROR_OK) {
+		LOG_DEBUG ("mips_ejtag_drscan_32 failed: ejtag_ctrl = 0x%8.8x", ejtag_ctrl);
 		return retval;
+	}
 
 	/* clear this bit before handling polling
 	 * as after reset registers will read zero */
@@ -211,8 +214,11 @@ static int mips_m4k_poll(struct target *target)
 
 		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_CONTROL);
 		retval = mips_ejtag_drscan_32(ejtag_info, &ejtag_ctrl);
-		if (retval != ERROR_OK)
+		if (retval != ERROR_OK) {
+			LOG_DEBUG ("mips_ejtag_drscan_32 failed: ejtag_ctrl = 0x%8.8x", ejtag_ctrl);
 			return retval;
+		}
+
 		LOG_DEBUG("Reset Detected");
 	}
 
@@ -231,28 +237,36 @@ static int mips_m4k_poll(struct target *target)
 			mips_ejtag_set_instr(ejtag_info, EJTAG_INST_NORMALBOOT);
 			target->state = TARGET_HALTED;
 			retval = mips_m4k_debug_entry(target);
-			if (retval != ERROR_OK)
+			if (retval != ERROR_OK) {
+				LOG_DEBUG ("mips_m4k_debug_entry failed");
 				return retval;
+			}
 
 			if (target->smp &&
 				((prev_target_state == TARGET_RUNNING)
 			     || (prev_target_state == TARGET_RESET))) {
 				retval = update_halt_gdb(target);
-				if (retval != ERROR_OK)
+				if (retval != ERROR_OK) {
+					LOG_DEBUG ("update_halt_gdb failed");
 					return retval;
+				}
 			}
 			target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 		} else if (target->state == TARGET_DEBUG_RUNNING) {
 			target->state = TARGET_HALTED;
 
 			retval = mips_m4k_debug_entry(target);
-			if (retval != ERROR_OK)
+			if (retval != ERROR_OK) {
+				LOG_DEBUG ("mips_m4k_debug_entry failed");
 				return retval;
+			}
 
 			if (target->smp) {
 				retval = update_halt_gdb(target);
-				if (retval != ERROR_OK)
+				if (retval != ERROR_OK) {
+					LOG_DEBUG ("update_halt_gdb failed");
 					return retval;
+				}
 			}
 
 			target_call_event_callbacks(target, TARGET_EVENT_DEBUG_HALTED);
@@ -273,7 +287,7 @@ static int mips_m4k_halt(struct target *target)
 	LOG_DEBUG("target->state: %s", target_state_name(target));
 
 	if (target->state == TARGET_HALTED) {
-		LOG_DEBUG("target was already halted");
+		LOG_INFO("target was already halted");
 		return ERROR_OK;
 	}
 

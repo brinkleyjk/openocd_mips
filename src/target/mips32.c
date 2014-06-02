@@ -202,6 +202,8 @@ int mips32_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
 
 int mips32_save_context(struct target *target)
 {
+	LOG_INFO ("mips32_save_context");
+
     int i;
 
     /* get pointers to arch-specific information */
@@ -210,14 +212,18 @@ int mips32_save_context(struct target *target)
 
     /* read core registers */
     int retval = mips32_pracc_read_regs(ejtag_info, mips32->core_regs);
-	if (retval != ERROR_OK)
+	if (retval != ERROR_OK) {
+		LOG_DEBUG ("mips32_pracc_read_regs failed");
 		return retval;
+	}
 	
     for (i = 0; i < MIPS32NUMCOREREGS; i++) {
 		if (!mips32->core_cache->reg_list[i].valid) {
 			retval = mips32->read_core_reg(target, i);
-			if (retval != ERROR_OK)
+			if (retval != ERROR_OK) {
+				LOG_DEBUG ("mips32->read_core_reg failed");
 				return retval;
+			}
 		}
     }
 
@@ -844,13 +850,17 @@ COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
     struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 	int i = 0;
 
+	char *cache_msg[] = {"instr", "data", "L23", NULL, NULL, NULL};
+
     if (target->state != TARGET_HALTED){
 		LOG_WARNING("target not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	if (CMD_ARGC >= 2)
+	if (CMD_ARGC >= 2){
+		LOG_DEBUG("ERROR_COMMAND_SYNTAX_ERROR");
 		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
 
     if (CMD_ARGC == 1) {
 		/* PARSE command options - all/inst/data/allnowb/datanowb */
@@ -858,42 +868,70 @@ COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
 			if (strcmp(CMD_ARGV[0], invalidate_cmd[i].arg) == 0){
 				switch (invalidate_cmd[i].option) {
 					case ALL:
-						LOG_INFO ("all");
+						LOG_INFO ("clearing %s cache", cache_msg[1]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[1].option);
+
+#if 0
+						/* Disable for now - need to add L2 code */
+						LOG_INFO ("clearing %s cache", cache_msg[2]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, L2);
+#endif
+
+						LOG_INFO ("clearing %s cache", cache_msg[0]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[0].option);
 						retval = ERROR_OK;
 						break;
+
 					case INST:
-						LOG_INFO ("inst");
+						LOG_INFO ("clearing %s cache", cache_msg[0]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[0].option);
 						retval = ERROR_OK;
 						break;
+
 					case DATA:
-						LOG_INFO ("data");
+						LOG_INFO ("clearing %s cache", cache_msg[1]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[1].option);
 						retval = ERROR_OK;
 						break;
+
 					case ALLNOWB:
-						LOG_INFO ("allnowb - not coded yet!");
+						LOG_INFO ("clearing %s cache no writeback", cache_msg[1]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[4].option);
+
+#if 0
+						/* Disable for now - need to add L2 code */
+						LOG_INFO ("clearing %s cache no writeback", cache_msg[2]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, L2);
+#endif
+
+						LOG_INFO ("clearing %s cache", cache_msg[0]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[0].option);
 						retval = ERROR_OK;
 						break;
+
 					case DATANOWB:
-						LOG_INFO ("datanowb - not coded yet!");
+						LOG_INFO ("clearing %s cache no writeback", cache_msg[0]);
+						mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[4].option);
 						retval = ERROR_OK;
 						break;
+
 					default:
+						LOG_INFO ("Invalid option");
 						retval = ERROR_FAIL;
 				}
-				if (retval == ERROR_FAIL)
+
+				if (retval == ERROR_FAIL){
+					LOG_INFO ("xxx");
 					return ERROR_FAIL;
+				}
+				else
+					break;
 			}
-			if (retval == -1)
-				return ERROR_FAIL;
-			else
-				break;
 		}
 	} else {
-		LOG_INFO ("invalidate cache all");
+		/* default is All */
 		i = 0;
 	}
-
-	mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[i].option);
 
 	return ERROR_OK;
 }
