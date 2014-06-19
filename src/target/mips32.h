@@ -76,6 +76,13 @@ enum mips32_isa_mode {
 	MIPS32_ISA_MIPS16E = 1,
 };
 
+enum micro_mips_enabled {
+	MIPS32_ONLY = 0,
+	MICRO_MIPS_ONLY = 1,
+	MICRO_MIPS32_16_ONRESET_MIPS32 = 2,
+	MICRO_MIPS32_16_ONRESET_MIPS16 = 3,
+};
+
 struct mips32_comparator {
 	int used;
 	uint32_t bp_value;
@@ -89,6 +96,7 @@ struct mips32_common {
 	struct mips_ejtag ejtag_info;
 	uint32_t core_regs[MIPS32NUMCOREREGS];
 	enum mips32_isa_mode isa_mode;
+	enum micro_mips_enabled mmips;
 
 	/* working area for fastdata access */
 	struct working_area *fast_data_area;
@@ -466,6 +474,9 @@ struct mips32_algorithm {
 #define MIPS32_DRET					0x4200001F
 #define MIPS32_SDBBP				0x7000003F	/* MIPS32_J_INST(MIPS32_OP_SPECIAL2, MIPS32_OP_SDBBP) */
 #define MIPS16_SDBBP				0xE801
+//#define MICRO_MIPS32_SDBBP			0x0000DB7C
+#define MICRO_MIPS32_SDBBP			0x000046C0
+#define MICRO_MIPS_SDBBP			0x46C0
 
 extern const struct command_registration mips32_command_handlers[];
 
@@ -501,4 +512,5 @@ int mips32_checksum_memory(struct target *target, uint32_t address,
 int mips32_blank_check_memory(struct target *target,
 		uint32_t address, uint32_t count, uint32_t *blank);
 
+int mips32_mark_reg_invalid (struct target *, int);
 #endif	/*MIPS32_H*/

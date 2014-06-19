@@ -2406,7 +2406,7 @@ static int handle_target(void *priv)
 					target->backoff.times *= 2;
 					target->backoff.times++;
 				}
-				LOG_USER("Polling target %s failed, GDB will be halted. Polling again in %dms",
+				LOG_DEBUG("Polling target %s failed, GDB will be halted. Polling again in %dms",
 						target_name(target),
 						target->backoff.times * polling_interval);
 

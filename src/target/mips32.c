@@ -36,7 +36,7 @@
 #include "register.h"
 
 static const char *mips_isa_strings[] = {
-    "MIPS32", "MIPS16e"
+    "MIPS32", "MIPS16"
 };
 
 static const struct {
@@ -150,7 +150,7 @@ static int mips32_read_core_reg(struct target *target, int num)
     struct mips32_common *mips32 = target_to_mips32(target);
 
     if ((num < 0) || (num >= MIPS32NUMCOREREGS))
-	return ERROR_COMMAND_SYNTAX_ERROR;
+		return ERROR_COMMAND_SYNTAX_ERROR;
 
     reg_value = mips32->core_regs[num];
     buf_set_u32(mips32->core_cache->reg_list[num].value, 0, 32, reg_value);
@@ -202,7 +202,7 @@ int mips32_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
 
 int mips32_save_context(struct target *target)
 {
-	LOG_INFO ("mips32_save_context");
+//	LOG_INFO ("mips32_save_context");
 
     int i;
 
@@ -363,79 +363,79 @@ int mips32_run_algorithm(struct target *target, int num_mem_params,
 			 struct reg_param *reg_params, uint32_t entry_point,
 			 uint32_t exit_point, int timeout_ms, void *arch_info)
 {
-    struct mips32_common *mips32 = target_to_mips32(target);
-    struct mips32_algorithm *mips32_algorithm_info = arch_info;
-    enum mips32_isa_mode isa_mode = mips32->isa_mode;
+	struct mips32_common *mips32 = target_to_mips32(target);
+	struct mips32_algorithm *mips32_algorithm_info = arch_info;
+	enum mips32_isa_mode isa_mode = mips32->isa_mode;
 
-    uint32_t context[MIPS32NUMCOREREGS];
-    int i;
-    int retval = ERROR_OK;
+	uint32_t context[MIPS32NUMCOREREGS];
+	int i;
+	int retval = ERROR_OK;
 
-    LOG_DEBUG("Running algorithm");
+	LOG_DEBUG("Running algorithm");
 
-    /* NOTE: mips32_run_algorithm requires that each algorithm uses a software breakpoint
-     * at the exit point */
+	/* NOTE: mips32_run_algorithm requires that each algorithm uses a software breakpoint
+	 * at the exit point */
 
-    if (mips32->common_magic != MIPS32_COMMON_MAGIC) {
+	if (mips32->common_magic != MIPS32_COMMON_MAGIC) {
 		LOG_ERROR("current target isn't a MIPS32 target");
 		return ERROR_TARGET_INVALID;
-    }
+	}
 
-    if (target->state != TARGET_HALTED) {
+	if (target->state != TARGET_HALTED) {
 		LOG_WARNING("target not halted");
 		return ERROR_TARGET_NOT_HALTED;
-    }
+	}
 
-    /* refresh core register cache */
-    for (i = 0; i < MIPS32NUMCOREREGS; i++) {
+	/* refresh core register cache */
+	for (i = 0; i < MIPS32NUMCOREREGS; i++) {
 		if (!mips32->core_cache->reg_list[i].valid)
 			mips32->read_core_reg(target, i);
 
 		context[i] = buf_get_u32(mips32->core_cache->reg_list[i].value, 0, 32);
-    }
+	}
 
-    for (i = 0; i < num_mem_params; i++) {
+	for (i = 0; i < num_mem_params; i++) {
 		retval = target_write_buffer(target, mem_params[i].address,
-									 mem_params[i].size, mem_params[i].value);
+																 mem_params[i].size, mem_params[i].value);
 		if (retval != ERROR_OK)
 			return retval;
-    }
+	}
 
-    for (i = 0; i < num_reg_params; i++) {
+	for (i = 0; i < num_reg_params; i++) {
 		struct reg *reg = register_get_by_name(mips32->core_cache, reg_params[i].reg_name, 0);
 
-	if (!reg) {
+		if (!reg) {
 	    LOG_ERROR("BUG: register '%s' not found", reg_params[i].reg_name);
 	    return ERROR_COMMAND_SYNTAX_ERROR;
-	}
+		}
 
-	if (reg->size != reg_params[i].size) {
+		if (reg->size != reg_params[i].size) {
 	    LOG_ERROR("BUG: register '%s' size doesn't match reg_params[i].size",
-		      reg_params[i].reg_name);
+								reg_params[i].reg_name);
 
 	    return ERROR_COMMAND_SYNTAX_ERROR;
+		}
+
+		mips32_set_core_reg(reg, reg_params[i].value);
 	}
 
-	mips32_set_core_reg(reg, reg_params[i].value);
-    }
+	mips32->isa_mode = mips32_algorithm_info->isa_mode;
 
-    mips32->isa_mode = mips32_algorithm_info->isa_mode;
+	retval = mips32_run_and_wait(target, entry_point, timeout_ms, exit_point, mips32);
 
-    retval = mips32_run_and_wait(target, entry_point, timeout_ms, exit_point, mips32);
-
-    if (retval != ERROR_OK)
+	if (retval != ERROR_OK)
 		return retval;
 
-    for (i = 0; i < num_mem_params; i++) {
+	for (i = 0; i < num_mem_params; i++) {
 		if (mem_params[i].direction != PARAM_OUT) {
 			retval = target_read_buffer(target, mem_params[i].address, mem_params[i].size,
-										mem_params[i].value);
+																	mem_params[i].value);
 			if (retval != ERROR_OK)
 				return retval;
 		}
-    }
+	}
 
-    for (i = 0; i < num_reg_params; i++) {
+	for (i = 0; i < num_reg_params; i++) {
 		if (reg_params[i].direction != PARAM_OUT) {
 			struct reg *reg = register_get_by_name(mips32->core_cache, reg_params[i].reg_name, 0);
 			if (!reg) {
@@ -445,32 +445,32 @@ int mips32_run_algorithm(struct target *target, int num_mem_params,
 
 			if (reg->size != reg_params[i].size) {
 				LOG_ERROR("BUG: register '%s' size doesn't match reg_params[i].size",
-						  reg_params[i].reg_name);
+									reg_params[i].reg_name);
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 
 			buf_set_u32(reg_params[i].value, 0, 32, buf_get_u32(reg->value, 0, 32));
 		}
-    }
+	}
 
-    /* restore everything we saved before */
-    for (i = 0; i < MIPS32NUMCOREREGS; i++) {
+	/* restore everything we saved before */
+	for (i = 0; i < MIPS32NUMCOREREGS; i++) {
 		uint32_t regvalue;
 		regvalue = buf_get_u32(mips32->core_cache->reg_list[i].value, 0, 32);
 		if (regvalue != context[i]) {
 			LOG_DEBUG("restoring register %s with value 0x%8.8" PRIx32,
-					  mips32->core_cache->reg_list[i].name, context[i]);
+								mips32->core_cache->reg_list[i].name, context[i]);
 
 			buf_set_u32(mips32->core_cache->reg_list[i].value,
-						0, 32, context[i]);
+									0, 32, context[i]);
 			mips32->core_cache->reg_list[i].valid = 1;
 			mips32->core_cache->reg_list[i].dirty = 1;
 		}
-    }
+	}
 
-    mips32->isa_mode = isa_mode;
+	mips32->isa_mode = isa_mode;
 
-    return ERROR_OK;
+	return ERROR_OK;
 }
 
 int mips32_examine(struct target *target)
@@ -760,6 +760,17 @@ int mips32_blank_check_memory(struct target *target,
 
     return retval;
 }
+int mips32_mark_reg_invalid (struct target *target, int reg_num)
+{
+    struct mips32_common *mips32 = target_to_mips32(target);
+
+	if (mips32->core_cache->reg_list[reg_num].dirty != 0)
+		LOG_DEBUG("Register %s marked dirty being abandoned", mips32_regs[reg_num]);
+
+	mips32->core_cache->reg_list[reg_num].valid = 0;
+
+    return ERROR_OK;
+}
 
 static int mips32_verify_pointer(struct command_context *cmd_ctx,
 				 struct mips32_common *mips32)
@@ -935,6 +946,21 @@ COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
 
 	return ERROR_OK;
 }
+COMMAND_HANDLER(mips32_handle_mark_reg_invalid)
+{
+	struct target *target = get_current_target(CMD_CTX);
+    struct mips32_common *mips32 = target_to_mips32(target);
+	uint32_t temp;
+	
+	if (CMD_ARGC == 1)
+		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], temp);
+	else if (CMD_ARGC > 1)
+			return ERROR_COMMAND_SYNTAX_ERROR;
+
+    mips32->core_cache->reg_list[temp].valid = 0;
+
+	return ERROR_OK;
+}
 
 COMMAND_HANDLER(mips32_handle_scan_delay_command)
 {
@@ -977,13 +1003,20 @@ static const struct command_registration mips32_exec_command_handlers[] = {
 	{
 		.name = "invalidate",
 		.handler = mips32_handle_invalidate_cache_command,
-		.mode = COMMAND_EXEC,
+		.mode = COMMAND_ANY,
 		.help = "Invalidate either or both of the instruction and data caches.",
 		.usage = "[all|inst|data|allnowb|datanowb]",
 	},
     {
 		.name = "scan_delay",
 		.handler = mips32_handle_scan_delay_command,
+		.mode = COMMAND_ANY,
+		.help = "display/set scan delay in nano seconds",
+		.usage = "[value]",
+    },
+    {
+		.name = "mark_reg_invalid",
+		.handler = mips32_handle_mark_reg_invalid,
 		.mode = COMMAND_ANY,
 		.help = "display/set scan delay in nano seconds",
 		.usage = "[value]",
