@@ -720,10 +720,8 @@ static int mips_m4k_set_breakpoint(struct target *target,
 		if (mips32->mmips != MIPS32_ONLY){ 
 //		if ((breakpoint->length == 3) || ((breakpoint->length == 5) && ((breakpoint->address % 4) != 0))){
 			comparator_list[bp_num].bp_value = breakpoint->address | 1; /* set ISA Mode bit */
-//			LOG_INFO ("MicroMIPS");
 		}
 		else {
-//			LOG_INFO ("MIPS32");
 			comparator_list[bp_num].bp_value = breakpoint->address;
 		}
 

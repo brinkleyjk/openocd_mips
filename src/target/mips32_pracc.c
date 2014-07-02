@@ -1260,6 +1260,7 @@ exit:
     return ctx.retval;
 }
 
+
 int mips32_pracc_read_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 {
 //	LOG_INFO ("mips32_pracc_read_regs");

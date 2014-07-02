@@ -89,6 +89,8 @@ struct mips32_comparator {
 	uint32_t reg_address;
 };
 
+
+
 struct mips32_common {
 	uint32_t common_magic;
 	void *arch_info;

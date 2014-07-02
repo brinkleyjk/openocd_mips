@@ -289,17 +289,17 @@ struct reg_cache *mips32_build_reg_cache(struct target *target)
     mips32->core_cache = cache;
 
     for (i = 0; i < num_regs; i++) {
-	arch_info[i].num = mips32_regs[i].id;
-	arch_info[i].target = target;
-	arch_info[i].mips32_common = mips32;
+		arch_info[i].num = mips32_regs[i].id;
+		arch_info[i].target = target;
+		arch_info[i].mips32_common = mips32;
 
-	reg_list[i].name = mips32_regs[i].name;
-	reg_list[i].size = 32;
-	reg_list[i].value = calloc(1, 4);
-	reg_list[i].dirty = 0;
-	reg_list[i].valid = 0;
-	reg_list[i].type = &mips32_reg_type;
-	reg_list[i].arch_info = &arch_info[i];
+		reg_list[i].name = mips32_regs[i].name;
+		reg_list[i].size = 32;
+		reg_list[i].value = calloc(1, 4);
+		reg_list[i].dirty = 0;
+		reg_list[i].valid = 0;
+		reg_list[i].type = &mips32_reg_type;
+		reg_list[i].arch_info = &arch_info[i];
     }
 
     return cache;
@@ -331,6 +331,7 @@ static int mips32_run_and_wait(struct target *target, uint32_t entry_point,
 {
     uint32_t pc;
     int retval;
+
     /* This code relies on the target specific  resume() and  poll()->debug_entry()
      * sequence to write register values to the processor and the read them back */
     retval = target_resume(target, 0, entry_point, 0, 1);
