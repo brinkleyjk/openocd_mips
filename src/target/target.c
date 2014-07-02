@@ -2,7 +2,7 @@
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
  *                                                                         *
- *   Copyright (C) 2007-2010 Øyvind Harboe                             *
+ *   Copyright (C) 2007-2010 Øyvind Harboe                                 *
  *   oyvind.harboe@zylin.com                                               *
  *                                                                         *
  *   Copyright (C) 2008, Duane Ellis                                       *
@@ -2036,7 +2036,8 @@ int target_read_u64(struct target *target, uint64_t address, uint64_t *value)
 	if (retval == ERROR_OK) {
 		*value = target_buffer_get_u64(target, value_buf);
 		LOG_DEBUG("address: 0x%" PRIx64 ", value: 0x%16.16" PRIx64 "",
-				  address, *value);
+				  address,
+				  *value);
 	} else {
 		*value = 0x0;
 		LOG_DEBUG("address: 0x%" PRIx64 " failed",
@@ -2406,7 +2407,7 @@ static int handle_target(void *priv)
 					target->backoff.times *= 2;
 					target->backoff.times++;
 				}
-				LOG_DEBUG("Polling target %s failed, GDB will be halted. Polling again in %dms",
+				LOG_USER("Polling target %s failed, GDB will be halted. Polling again in %dms",
 						target_name(target),
 						target->backoff.times * polling_interval);
 
@@ -2417,8 +2418,12 @@ static int handle_target(void *priv)
 				return retval;
 			}
 			/* Since we succeeded, we reset backoff count */
-			if (target->backoff.times > 0)
-				LOG_USER("Polling target %s succeeded again", target_name(target));
+			if (target->backoff.times > 0) {
+				LOG_USER("Polling target %s succeeded again, trying to reexamine", target_name(target));
+				target_reset_examined(target);
+				target_examine_one(target);
+			}
+
 			target->backoff.times = 0;
 		}
 	}
@@ -3133,7 +3138,7 @@ static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
 	}
 
 	struct duration bench;
-//	duration_start(&bench);
+	duration_start(&bench);
 
 	if (CMD_ARGC >= 2) {
 		uint32_t addr;
@@ -3150,8 +3155,6 @@ static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
 	retval = image_open(&image, CMD_ARGV[0], (CMD_ARGC == 3) ? CMD_ARGV[2] : NULL);
 	if (retval != ERROR_OK)
 		return retval;
-
-	duration_start(&bench);
 
 	image_size = 0x0;
 	int diffs = 0;
@@ -3200,7 +3203,6 @@ static COMMAND_HELPER(handle_verify_image_command_internal, int verify)
 					size *= 4;
 					count /= 4;
 				}
-
 				retval = target_read_memory(target, image.sections[i].base_address, size, count, data);
 				if (retval == ERROR_OK) {
 					uint32_t t;
@@ -3284,9 +3286,9 @@ static int handle_bp_command_list(struct command_context *cmd_ctx)
 				command_print(cmd_ctx, "\t|--->linked with ContextID: 0x%8.8" PRIx32,
 							breakpoint->asid);
 			} else
-				command_print(cmd_ctx, "Breakpoint(IVA): 0x%8.8" PRIx32 ", 0x%x, %i",
+				command_print(cmd_ctx, "Hard Breakpoint(IVA): 0x%8.8" PRIx32 ", 0x%x, %i",
 							breakpoint->address,
-							breakpoint->length, breakpoint->set);
+							breakpoint->length, breakpoint->unique_id);
 		}
 
 		breakpoint = breakpoint->next;
@@ -5102,6 +5104,7 @@ static int target_create(Jim_GetOptInfo *goi)
 	target = calloc(1, sizeof(struct target));
 	/* set target number */
 	target->target_number = new_target_number();
+	cmd_ctx->current_target = target->target_number;
 
 	/* allocate memory for each unique target type */
 	target->type = calloc(1, sizeof(struct target_type));
@@ -5714,7 +5717,7 @@ COMMAND_HANDLER(handle_test_mem_access_command)
 					read_buf[i] = read_ref[i];
 				}
 				command_print_sameline(CMD_CTX,
-						"Test read %d x %d @ %d to %saligned buffer: ", count,
+						"Test read %" PRIu32 " x %d @ %d to %saligned buffer: ", count,
 						size, offset, host_offset ? "un" : "");
 
 				struct duration bench;
@@ -5786,7 +5789,7 @@ out:
 				for (size_t i = 0; i < host_bufsiz; i++)
 					write_buf[i] = rand();
 				command_print_sameline(CMD_CTX,
-						"Test write %d x %d @ %d from %saligned buffer: ", count,
+						"Test write %" PRIu32 " x %d @ %d from %saligned buffer: ", count,
 						size, offset, host_offset ? "un" : "");
 
 				retval = target_write_memory(target, wa->address, 1, num_bytes, test_pattern);

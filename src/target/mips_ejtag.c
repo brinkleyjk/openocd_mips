@@ -307,7 +307,7 @@ int mips_ejtag_exit_debug(struct mips_ejtag *ejtag_info)
 //								   ctx.store_count, NULL, ctx.code_count - 1);
 
 	/* pic32mx workaround, false pending at low core clock */
-	jtag_add_sleep(1000);
+	jtag_add_sleep(2000);
 	return ctx.retval;
 }
 

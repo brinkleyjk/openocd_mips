@@ -284,7 +284,7 @@ static int mips_m4k_poll(struct target *target)
 
 			target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 		} else if (target->state == TARGET_DEBUG_RUNNING) {
-			LOG_INFO ("target->state == TARGET_DEBUG_RUNNING");
+//			LOG_INFO ("target->state == TARGET_DEBUG_RUNNING");
 			target->state = TARGET_HALTED;
 
 			retval = mips_m4k_debug_entry(target, 1);
@@ -440,6 +440,8 @@ static int mips_m4k_single_step_core(struct target *target)
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
 
+//	LOG_INFO ("mips_m4k_single_step_core");
+
 	/* configure single step mode */
 	int retval = mips_ejtag_config_step(ejtag_info, 1);
 	if (retval != ERROR_OK)
@@ -455,7 +457,7 @@ static int mips_m4k_single_step_core(struct target *target)
 	if (retval != ERROR_OK)
 		return retval;
 
-	LOG_INFO ("mips_m4k_debug_entry - mips_m4k_single_step_core");
+//	LOG_INFO ("mips_m4k_debug_entry - mips_m4k_single_step_core");
 	retval = mips_m4k_debug_entry(target, 0);
 	if (retval != ERROR_OK)
 		return retval;
@@ -611,6 +613,7 @@ static int mips_m4k_step(struct target *target, int current,
 	struct breakpoint *breakpoint = NULL;
 	int retval;
 
+//	LOG_INFO ("mips_m4k_step");
 	if (target->state != TARGET_HALTED) {
 		LOG_WARNING("target not halted");
 		return ERROR_TARGET_NOT_HALTED;
@@ -618,7 +621,7 @@ static int mips_m4k_step(struct target *target, int current,
 
 	/* current = 1: continue on current pc, otherwise continue at <address> */
 	if (!current) {
-//		LOG_INFO("!current - addr: 0x%8.8x", address);
+//		LOG_INFO("!current: %d", current);
 		buf_set_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32, address);
 		mips32->core_cache->reg_list[MIPS32_PC].dirty = 1;
 		mips32->core_cache->reg_list[MIPS32_PC].valid = 1;
@@ -626,6 +629,7 @@ static int mips_m4k_step(struct target *target, int current,
 
 	/* the front-end may request us not to handle breakpoints */
 	if (handle_breakpoints) {
+//		LOG_INFO ("handle_breakpoints");
 		breakpoint = breakpoint_find(target,
 				buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32));
 		if (breakpoint)
@@ -655,8 +659,10 @@ static int mips_m4k_step(struct target *target, int current,
 	if (retval != ERROR_OK)
 		return retval;
 
-	if (breakpoint)
+	if (breakpoint){
+//		LOG_INFO ("Restore Break");
 		mips_m4k_set_breakpoint(target, breakpoint);
+	}
 
 	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 
@@ -702,41 +708,58 @@ static int mips_m4k_set_breakpoint(struct target *target,
 		breakpoint->set = bp_num + 1;
 		comparator_list[bp_num].used = 1;
 
-		/* Check for microMips */
-		if ((breakpoint->length == 3) || ((breakpoint->length == 5) && ((breakpoint->address % 4) != 0))){
-			comparator_list[bp_num].bp_value = breakpoint->address | 1; /* set ISA Mode bit */
-		}
-		else
-			comparator_list[bp_num].bp_value = breakpoint->address;
-
 		/* EJTAG 2.0 uses 30bit IBA. First 2 bits are reserved.
 		 * Warning: there is no IB ASID registers in 2.0.
 		 * Do not set it! :) */
-		if (ejtag_info->ejtag_version == EJTAG_VERSION_20)
+		if (ejtag_info->ejtag_version == EJTAG_VERSION_20){
+//			LOG_INFO("Interesting");
 			comparator_list[bp_num].bp_value &= 0xFFFFFFFC;
+		}
 
+		/* Check for microMips */
+		if (mips32->mmips != MIPS32_ONLY){ 
+//		if ((breakpoint->length == 3) || ((breakpoint->length == 5) && ((breakpoint->address % 4) != 0))){
+			comparator_list[bp_num].bp_value = breakpoint->address | 1; /* set ISA Mode bit */
+//			LOG_INFO ("MicroMIPS");
+		}
+		else {
+//			LOG_INFO ("MIPS32");
+			comparator_list[bp_num].bp_value = breakpoint->address;
+		}
+
+//		LOG_INFO(" 1- comparator_list[%i].reg_address: %x - comparator_list[%i].bp_value: %x", bp_num,
+//				 comparator_list[bp_num].reg_address, bp_num, comparator_list[bp_num].bp_value);
 		target_write_u32(target, comparator_list[bp_num].reg_address,
 				comparator_list[bp_num].bp_value);
+
+//		LOG_INFO(" 2- comparator_list[%i].reg_address + ejtag_info->ejtag_ibm_offs: %x",
+//				 bp_num, comparator_list[bp_num].reg_address+ejtag_info->ejtag_ibm_offs);
 		target_write_u32(target, comparator_list[bp_num].reg_address +
 				 ejtag_info->ejtag_ibm_offs, 0x00000000);
+
+//		LOG_INFO(" 3 - comparator_list[%i].reg_address + ejtag_info->ejtag_ibc_offs: %x", bp_num,
+//				 comparator_list[bp_num].reg_address + ejtag_info->ejtag_ibc_offs);
 		target_write_u32(target, comparator_list[bp_num].reg_address +
 				 ejtag_info->ejtag_ibc_offs, 1);
 		LOG_DEBUG("bpid: %" PRIu32 ", bp_num %i bp_value 0x%" PRIx32 "",
 				  breakpoint->unique_id,
 				  bp_num, comparator_list[bp_num].bp_value);
+
+//		LOG_INFO("bpid: %" PRIu32 ", bp_num %i bp_value 0x%" PRIx32 "",
+//				  breakpoint->unique_id,
+//				  bp_num, comparator_list[bp_num].bp_value);
 	} else if (breakpoint->type == BKPT_SOFT) {
 		LOG_DEBUG("bpid: %" PRIu32, breakpoint->unique_id);
 		if ((breakpoint->length == 4) || ((breakpoint->length == 5) && ((breakpoint->address % 4) == 0))) {
 			uint32_t verify = 0xffffffff;
 			uint32_t breakpt_instr;
-			uint32_t *orig_instr;
 
 //			LOG_INFO ("32 bit:breakpoint->length: %d", breakpoint->length);
 
 			if (breakpoint->length == 5) {
 				breakpoint->length = 4;
 				breakpt_instr = MICRO_MIPS32_SDBBP;
-//				LOG_INFO ("breakpoint->address: 0x%8.8x", breakpoint->address);
+//				LOG_INFO ("mMips32: 0x%8.8x", breakpoint->address);
 			}
 			else
 				breakpt_instr = MIPS32_SDBBP;
@@ -776,7 +799,6 @@ static int mips_m4k_set_breakpoint(struct target *target,
 		} else {
 			uint16_t verify = 0xffff;
 			uint16_t breakpt_instr;
-			uint16_t *orig_instr;
 
 			/* IF GDB sends bp->length 3 for microMips support then change it to 2 */
 //			LOG_INFO ("breakpoint->length: %d bkpt_addr: 0x%8.8x", breakpoint->length, breakpoint->address);
@@ -835,7 +857,7 @@ static int mips_m4k_set_breakpoint(struct target *target,
 static int mips_m4k_unset_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
-	LOG_INFO ("mips_m4k_unset_breakpoint");
+//	LOG_INFO ("mips_m4k_unset_breakpoint");
 
 	/* get pointers to arch-specific information */
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -849,7 +871,7 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 	}
 
 	if (breakpoint->type == BKPT_HARD) {
-		LOG_INFO ("HBREAK");
+//		LOG_INFO ("HBREAK");
 		int bp_num = breakpoint->set - 1;
 		if ((bp_num < 0) || (bp_num >= mips32->num_inst_bpoints)) {
 			LOG_DEBUG("Invalid FP Comparator number in breakpoint (bpid: %" PRIu32 ")",
@@ -868,10 +890,8 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 	} else {
 		/* restore original instruction (kept in target endianness) */
 		LOG_DEBUG("bpid: %" PRIu32, breakpoint->unique_id);
-		LOG_INFO("breakpoint->length:%d", breakpoint->length);
 		if ((breakpoint->length == 4) || ((breakpoint->length == 5) && ((breakpoint->address % 4) == 0))) {
 			uint32_t current_instr;
-			uint32_t *orig_instr;
 
 			if (breakpoint->length == 5){
 				breakpoint->length = 4;
@@ -891,7 +911,7 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 			 * we must first transform it to _host_ endianess using target_buffer_get_u32().
 			 */
 			current_instr = target_buffer_get_u32(target, (uint8_t *)&current_instr);
-			orig_instr = (uint32_t *) breakpoint->orig_instr;
+//			orig_instr = (uint32_t *) breakpoint->orig_instr;
 //			LOG_INFO ("breakpoint->orig_instr: 0x%4.4x bkpt_addr: 0x%8.8x", *orig_instr, breakpoint->address);
 
 			if ((current_instr == MIPS32_SDBBP) || (current_instr == MICRO_MIPS32_SDBBP)){
@@ -907,7 +927,6 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 		} else {
 //			LOG_INFO("mMIPS/MIP16");
 			uint16_t current_instr;
-			uint16_t *orig_instr;
 
 			/* check that user program has not modified breakpoint instruction */
 			retval = target_read_memory(target, breakpoint->address, 2, 1, (uint8_t *)&current_instr);
@@ -917,7 +936,7 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 			}
 
 			current_instr = target_buffer_get_u16(target, (uint8_t *)&current_instr);
-			orig_instr = (uint16_t *) breakpoint->orig_instr;
+//			orig_instr = (uint16_t *) breakpoint->orig_instr;
 //			LOG_INFO("curr instr: 0x%4.4x orig_instr: 0x%4.4x  bkpt address: 0x%8.8x", current_instr, *orig_instr, breakpoint->address);
 			if ((current_instr == MIPS16_SDBBP) || (current_instr == MICRO_MIPS_SDBBP)){
 				retval = target_write_memory(target, breakpoint->address, 2, 1, breakpoint->orig_instr);
@@ -1209,7 +1228,7 @@ static int mips_m4k_write_memory(struct target *target, uint32_t address,
 			return ERROR_OK;
 		}
 		else
-			if ((retval == ERROR_FAST_DOWNLOAD_FAILED) && 
+			if ((retval == ERROR_TARGET_FAST_DOWNLOAD_FAILED) && 
 				(ejtag_info->scan_delay < MIPS32_SCAN_DELAY_LEGACY_MODE)) {
 				return retval;
 			}

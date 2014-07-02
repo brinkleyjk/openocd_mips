@@ -854,7 +854,7 @@ static int mips32_pracc_clean_invalidate_cache(struct mips_ejtag *ejtag_info,
 		MIPS32_MFC0(15, 31, 0),					/* move COP0 DeSave to $15 */
     };
 
-	LOG_INFO (" mips32_pracc_clean_invalidate_cache");
+//	LOG_INFO (" mips32_pracc_clean_invalidate_cache");
     /**
      * Find cache line size in bytes
      */
@@ -866,7 +866,7 @@ static int mips32_pracc_clean_invalidate_cache(struct mips_ejtag *ejtag_info,
 
     /* dl encoding : dl=1 => 4 bytes, dl=2 => 8 bytes, etc... */
     clsiz = 0x2 << dl;
-	LOG_INFO ("clsiz: %x",clsiz);
+//	LOG_INFO ("clsiz: %x",clsiz);
 
     /* TODO remove array */
     uint32_t *param_in = malloc(3 * sizeof(uint32_t));
@@ -1525,11 +1525,11 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
 			// bad if this happens
 			if ((pending == count) && (address == MIPS32_PRACC_TEXT)) {
 				LOG_ERROR("\"reached max outstanding dangling accesses\" 0x%8.8" PRIx32 "", retval);
-				return ERROR_FAST_DOWNLOAD_FAILED;
+				return ERROR_TARGET_FAST_DOWNLOAD_FAILED;
 			}
 			else if (pending >= count) {
 					LOG_ERROR("\"reached excessed max outstanding dangling accesses\" %d", retval);
-					return ERROR_FAST_DOWNLOAD_FAILED;
+					return ERROR_TARGET_FAST_DOWNLOAD_FAILED;
 				}
 
 			if (address != MIPS32_PRACC_TEXT) {
@@ -1555,7 +1555,7 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
 		if (pending) {
 			if ((address != MIPS32_PRACC_FASTDATA_AREA) && (address != MIPS32_PRACC_TEXT)) {
 				LOG_ERROR("unexpected dmseg access: 0x%8.8" PRIx32 "", address);
-				return ERROR_FAST_DOWNLOAD_FAILED;
+				return ERROR_TARGET_FAST_DOWNLOAD_FAILED;
 			}
 			else {
 				LOG_ERROR("cleared dangling fastdata accesses: found %d out-of %d pending", pending, count);
@@ -1566,7 +1566,7 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
 			LOG_ERROR("mini program did not return to start addr = 0x%8.8" PRIx32 "", address);
 		}
 
-		return ERROR_FAST_DOWNLOAD_FAILED;
+		return ERROR_TARGET_FAST_DOWNLOAD_FAILED;
     }
 
 #if 0
