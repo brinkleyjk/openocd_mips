@@ -71,6 +71,53 @@ enum {
 	MIPS32NUMCOREREGS
 };
 
+#define MIPS32NUMCP0REGS 38
+#define MIPS32NUMDSPREGS 7
+static const struct {
+    unsigned reg;
+	unsigned sel;
+    const char *name;
+} mips32_cp0_regs[MIPS32NUMCP0REGS] = {
+	{ 4, 2, "UserLocal"},
+	{ 7, 0, "HWREna"},
+	{ 8, 0, "BadVAddr"},
+	{ 9, 0, "Count"},
+	{11, 0, "Compare"},
+	{12, 0, "Status"},
+	{12, 1, "IntCtl"},
+	{12, 2, "SRSCtl"},
+	{12, 4, "View_IPL"},
+	{13, 0, "Cause"},
+	{13, 5, "NestedExc"},
+	{14, 0, "EPC"},
+	{14, 2, "NestedEPC"},
+	{15, 0, "PRId"},
+	{15, 1, "EBase"},
+	{15, 2, "CDMMBase"},
+	{16, 0, "Config"},
+	{16, 1, "Config1"},
+	{16, 2, "Config2"},
+	{16, 3, "Config3"},
+	{16, 4, "Config4"},
+	{16, 5, "Config5"},
+	{16, 7, "Config7"},
+	{17, 0, "LLAddr"},
+	{23, 0, "Debug"},
+	{23, 1,  "TraceControl"},
+	{23, 2, "TraceControl2"},
+	{23, 3, "UserTraceData1"},
+	{23, 4, "TraceBPC"},
+	{24, 0, "DEPC"},
+	{24, 3, "UserTraceData2"},
+	{25, 0, "PerfCtl0"},
+	{25, 1, "PerfCnt0"},
+	{25, 2, "PerfCtl1"},
+	{25, 3, "PerfCnt1"},
+	{26, 0, "ErrCtl"},
+	{30, 0, "ErrorEPC"},
+	{31, 0, "DESAVE"},
+};
+
 enum mips32_isa_mode {
 	MIPS32_ISA_MIPS32 = 0,
 	MIPS32_ISA_MIPS16E = 1,
@@ -81,6 +128,15 @@ enum micro_mips_enabled {
 	MICRO_MIPS_ONLY = 1,
 	MICRO_MIPS32_16_ONRESET_MIPS32 = 2,
 	MICRO_MIPS32_16_ONRESET_MIPS16 = 3,
+};
+
+enum uP_dsp {
+	DSP_NOT_IMP = 0,
+	DSP_IMP = 1,
+};
+enum uP_dsp_rev{
+	DSP_REV1 = 0,
+	DSP_REV2 = 1,
 };
 
 struct mips32_comparator {
@@ -99,6 +155,8 @@ struct mips32_common {
 	uint32_t core_regs[MIPS32NUMCOREREGS];
 	enum mips32_isa_mode isa_mode;
 	enum micro_mips_enabled mmips;
+	enum uP_dsp dsp_implemented;
+	enum uP_dsp_rev dsp_rev;
 
 	/* working area for fastdata access */
 	struct working_area *fast_data_area;

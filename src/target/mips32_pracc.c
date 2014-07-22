@@ -1310,6 +1310,51 @@ exit:
     return ctx.retval;
 }
 
+int mips32_pracc_read_dsp_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
+{
+    struct pracc_queue_info ctx = {.max_code = 48};
+    static uint32_t dsp_read_code[] = {
+		0x00001052, 	/* mflhxu	v0  */
+		0x00201010, 	/* mfhi	v0,$ac1 */
+		0x00401010, 	/* mfhi	v0,$ac2 */
+		0x00601010, 	/* mfhi	v0,$ac3 */
+		0x00201012, 	/* mflo	v0,$ac1 */
+		0x00401012, 	/* mflo	v0,$ac2 */
+		0x00601012, 	/* mflo	v0,$ac3 */
+		0x7fff14b8, 	/* rddsp	v0  */
+    };
+
+	LOG_INFO ("mips32_pracc_read_dsp_regs");
+
+	/* check status register to determine if dsp register access is enabled */
+
+	/* Get status register so it can be restored later */
+
+	/* Init context queue */
+    pracc_queue_init(&ctx);
+    if (ctx.retval != ERROR_OK)
+		goto exit;
+
+    for (int i = 0; i != 7; i++) {
+		pracc_add(&ctx, 0, dsp_read_code[i]);			        /* load COP0 needed registers to $8 */
+		pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + (i * 4),
+				  MIPS32_SW(2, PRACC_OUT_OFFSET + (i * 4), 1));
+    }
+
+    pracc_add(&ctx, 0, MIPS32_B(NEG16(ctx.code_count + 1)));	/* jump to start */
+    pracc_add(&ctx, 0, MIPS32_MFC0(1, 31, 0));			        /* move COP0 DeSave to $1, restore reg1 */
+
+	ctx.store_count++;	/* Needed by legacy code, due to offset from reg0 */
+
+	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, regs);
+
+//    ejtag_info->reg2 = regs[8];	/* reg8 is saved but not restored, next called function should restore it */
+//    ejtag_info->status = regs[9];
+exit:
+    pracc_queue_free(&ctx);
+    return ctx.retval;
+}
+
 /* fastdata upload/download requires an initialized working area
  * to load the download code; it should not be called otherwise
  * fetch order from the fastdata area

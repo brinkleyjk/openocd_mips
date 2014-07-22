@@ -420,6 +420,9 @@ static int mips_m4k_assert_reset(struct target *target)
 	uint32_t cp0_reg = 16;
 	uint32_t cp0_sel = 3;
 	retval = mips32_cp0_read(ejtag_info, &Config3, cp0_reg, cp0_sel);
+	mips_m4k->mips32.dsp_implemented = ((Config3 & 0x00000400) >>  10);
+	mips_m4k->mips32.dsp_rev = ((Config3 & 0x00000800) >>  11);
+//	LOG_INFO ("Config3: %x - Mode: %x", Config3, ((Config3 & 0x0000C000) >>  14));
 	mips_m4k->mips32.mmips = ((Config3 & 0x0000C000) >>  14);
 	
 	return ERROR_OK;
@@ -613,7 +616,6 @@ static int mips_m4k_step(struct target *target, int current,
 	struct breakpoint *breakpoint = NULL;
 	int retval;
 
-//	LOG_INFO ("mips_m4k_step");
 	if (target->state != TARGET_HALTED) {
 		LOG_WARNING("target not halted");
 		return ERROR_TARGET_NOT_HALTED;
@@ -621,7 +623,6 @@ static int mips_m4k_step(struct target *target, int current,
 
 	/* current = 1: continue on current pc, otherwise continue at <address> */
 	if (!current) {
-//		LOG_INFO("!current: %d", current);
 		buf_set_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32, address);
 		mips32->core_cache->reg_list[MIPS32_PC].dirty = 1;
 		mips32->core_cache->reg_list[MIPS32_PC].valid = 1;
@@ -629,7 +630,6 @@ static int mips_m4k_step(struct target *target, int current,
 
 	/* the front-end may request us not to handle breakpoints */
 	if (handle_breakpoints) {
-//		LOG_INFO ("handle_breakpoints");
 		breakpoint = breakpoint_find(target,
 				buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32));
 		if (breakpoint)
@@ -712,23 +712,29 @@ static int mips_m4k_set_breakpoint(struct target *target,
 		 * Warning: there is no IB ASID registers in 2.0.
 		 * Do not set it! :) */
 		if (ejtag_info->ejtag_version == EJTAG_VERSION_20){
-//			LOG_INFO("Interesting");
 			comparator_list[bp_num].bp_value &= 0xFFFFFFFC;
 		}
 
 		/* Check for microMips */
-		if (mips32->mmips != MIPS32_ONLY){ 
-//		if ((breakpoint->length == 3) || ((breakpoint->length == 5) && ((breakpoint->address % 4) != 0))){
-			comparator_list[bp_num].bp_value = breakpoint->address | 1; /* set ISA Mode bit */
+		if (mips32->mmips != MIPS32_ONLY){
+//			LOG_INFO ("Set ISA MODE ");
+			comparator_list[bp_num].bp_value = breakpoint->address  | 1;
 		}
 		else {
+//			LOG_INFO ("Skipping setting ISA MODE - mips32->mmips: %x", mips32->mmips);
 			comparator_list[bp_num].bp_value = breakpoint->address;
 		}
-
-//		LOG_INFO(" 1- comparator_list[%i].reg_address: %x - comparator_list[%i].bp_value: %x", bp_num,
-//				 comparator_list[bp_num].reg_address, bp_num, comparator_list[bp_num].bp_value);
-		target_write_u32(target, comparator_list[bp_num].reg_address,
-				comparator_list[bp_num].bp_value);
+		
+		comparator_list[bp_num].bp_value = breakpoint->address;
+		if (mips32->mmips != MIPS32_ONLY){ 
+			target_write_u32(target, comparator_list[bp_num].reg_address,
+							 (comparator_list[bp_num].bp_value | 1));
+//			LOG_INFO ("Setting ISA MODE 0x%8.8x", (comparator_list[bp_num].bp_value | 1));
+		}
+		else {
+			target_write_u32(target, comparator_list[bp_num].reg_address,
+							 comparator_list[bp_num].bp_value);
+		}
 
 //		LOG_INFO(" 2- comparator_list[%i].reg_address + ejtag_info->ejtag_ibm_offs: %x",
 //				 bp_num, comparator_list[bp_num].reg_address+ejtag_info->ejtag_ibm_offs);
@@ -799,21 +805,15 @@ static int mips_m4k_set_breakpoint(struct target *target,
 			uint16_t breakpt_instr;
 
 			/* IF GDB sends bp->length 3 for microMips support then change it to 2 */
-//			LOG_INFO ("breakpoint->length: %d bkpt_addr: 0x%8.8x", breakpoint->length, breakpoint->address);
-
 			/* Check if kind field, is indicated microMips Break */
 			if ((breakpoint->length == 3) || ((breakpoint->length == 5) && ((breakpoint->address % 4) != 0))){
 				breakpoint->length = 2;
-//				LOG_INFO("mMips - bp");
 				breakpt_instr = MICRO_MIPS_SDBBP;
-//				LOG_INFO("mMips - bp (0x%4.4x)", breakpt_instr = MICRO_MIPS_SDBBP);
 			}
 			else {
-//				LOG_INFO("Mips16 - bp");
 				breakpt_instr = MIPS16_SDBBP;
 			}
 
-//			retval = target_read_memory(target, breakpoint->address, breakpoint->length, 1,
 			retval = target_read_memory(target, breakpoint->address, 2, 1, breakpoint->orig_instr);
 			if (retval != ERROR_OK){
 				LOG_DEBUG("target_read_memory failed");
@@ -883,6 +883,9 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 
 		comparator_list[bp_num].used = 0;
 		comparator_list[bp_num].bp_value = 0;
+
+//		LOG_INFO("unset - comparator_list[%i].reg_address + ejtag_info->ejtag_ibc_offs: %x", bp_num,
+//				 comparator_list[bp_num].reg_address + ejtag_info->ejtag_ibc_offs);
 		target_write_u32(target, comparator_list[bp_num].reg_address +
 				 ejtag_info->ejtag_ibc_offs, 0);
 	} else {
@@ -893,7 +896,6 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 
 			if (breakpoint->length == 5){
 				breakpoint->length = 4;
-//				LOG_INFO ("breakpoint->address: 0x%8.8x", breakpoint->address);
 			}
 
 			/* check that user program has not modified breakpoint instruction */
@@ -909,8 +911,6 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 			 * we must first transform it to _host_ endianess using target_buffer_get_u32().
 			 */
 			current_instr = target_buffer_get_u32(target, (uint8_t *)&current_instr);
-//			orig_instr = (uint32_t *) breakpoint->orig_instr;
-//			LOG_INFO ("breakpoint->orig_instr: 0x%4.4x bkpt_addr: 0x%8.8x", *orig_instr, breakpoint->address);
 
 			if ((current_instr == MIPS32_SDBBP) || (current_instr == MICRO_MIPS32_SDBBP)){
 				retval = target_write_memory(target, breakpoint->address, 4, 1, breakpoint->orig_instr);
@@ -923,7 +923,6 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 			}
 
 		} else {
-//			LOG_INFO("mMIPS/MIP16");
 			uint16_t current_instr;
 
 			/* check that user program has not modified breakpoint instruction */
@@ -934,8 +933,6 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 			}
 
 			current_instr = target_buffer_get_u16(target, (uint8_t *)&current_instr);
-//			orig_instr = (uint16_t *) breakpoint->orig_instr;
-//			LOG_INFO("curr instr: 0x%4.4x orig_instr: 0x%4.4x  bkpt address: 0x%8.8x", current_instr, *orig_instr, breakpoint->address);
 			if ((current_instr == MIPS16_SDBBP) || (current_instr == MICRO_MIPS_SDBBP)){
 				retval = target_write_memory(target, breakpoint->address, 2, 1, breakpoint->orig_instr);
 				if (retval != ERROR_OK){
@@ -1352,6 +1349,7 @@ static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+	struct working_area *fast_data_area;
 	int retval;
 	int write_t = 1;
 
@@ -1376,6 +1374,17 @@ static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
 
 		/* reset fastadata state so the algo get reloaded */
 		ejtag_info->fast_access_save = -1;
+	}
+
+	fast_data_area = mips32->fast_data_area;
+
+	if (address <= fast_data_area->address + fast_data_area->size &&
+			fast_data_area->address <= address + count) {
+		LOG_ERROR("fast_data (0x%8.8" PRIx32 ") is within write area "
+			  "(0x%8.8" PRIx32 "-0x%8.8" PRIx32 ").",
+			  fast_data_area->address, address, address + count);
+		LOG_ERROR("Change work-area-phys or load_image address!");
+		return ERROR_FAIL;
 	}
 
 	/* mips32_pracc_fastdata_xfer requires uint32_t in host endianness, */
@@ -1428,27 +1437,75 @@ COMMAND_HANDLER(mips_m4k_handle_cp0_command)
 	}
 
 	/* two or more argument, access a single register/select (write if third argument is given) */
-	if (CMD_ARGC < 2)
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	else {
-		uint32_t cp0_reg, cp0_sel;
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], cp0_reg);
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], cp0_sel);
+	if (CMD_ARGC < 2) {
+		uint32_t value;
 
+		if (CMD_ARGC == 0){
+			for (int i = 0; i < MIPS32NUMCP0REGS; i++){
+				retval = mips32_cp0_read(ejtag_info, &value, mips32_cp0_regs[i].reg, mips32_cp0_regs[i].sel);
+				if (retval != ERROR_OK) {
+					command_print(CMD_CTX, "couldn't access reg %s", mips32_cp0_regs[i].name);
+					return ERROR_OK;
+				}
+
+				command_print(CMD_CTX, "%s: 0x%8.8x", mips32_cp0_regs[i].name, value);
+			}
+		}
+		else {
+
+			for (int i = 0; i < MIPS32NUMCP0REGS; i++){
+				/* find register name */
+				if (strcmp(mips32_cp0_regs[i].name, CMD_ARGV[0]) == 0){
+					retval = mips32_cp0_read(ejtag_info, &value, mips32_cp0_regs[i].reg, mips32_cp0_regs[i].sel);
+					command_print(CMD_CTX, "0x%8.8x", value);
+					return ERROR_OK;
+				}
+			}
+
+			LOG_ERROR("BUG: register '%s' not found", CMD_ARGV[0]);
+			return ERROR_COMMAND_SYNTAX_ERROR;
+		}
+	}
+	else {
 		if (CMD_ARGC == 2) {
 			uint32_t value;
-			retval = mips32_cp0_read(ejtag_info, &value, cp0_reg, cp0_sel);
-			if (retval != ERROR_OK) {
-				command_print(CMD_CTX,
-						"couldn't access reg %" PRIi32,
-						cp0_reg);
-				return ERROR_OK;
-			}
-			command_print(CMD_CTX, "cp0 reg %" PRIi32 ", select %" PRIi32 ": %8.8" PRIx32,
-					cp0_reg, cp0_sel, value);
+			char tmp = *CMD_ARGV[0];
 
+			if (isdigit (tmp) == false) {
+				
+				for (int i = 0; i < MIPS32NUMCP0REGS; i++){
+					/* find register name */
+					if (strcmp(mips32_cp0_regs[i].name, CMD_ARGV[0]) == 0){
+						COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
+						retval = mips32_cp0_write(ejtag_info, value, mips32_cp0_regs[i].reg, mips32_cp0_regs[i].sel);
+						return ERROR_OK;
+					}
+				}
+
+				LOG_ERROR("BUG: register '%s' not found", CMD_ARGV[0]);
+				return ERROR_COMMAND_SYNTAX_ERROR;
+			}
+			else {
+				uint32_t cp0_reg, cp0_sel;
+
+				COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], cp0_reg);
+				COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], cp0_sel);
+
+				retval = mips32_cp0_read(ejtag_info, &value, cp0_reg, cp0_sel);
+				if (retval != ERROR_OK) {
+					command_print(CMD_CTX,
+								  "couldn't access reg %" PRIi32,
+								  cp0_reg);
+					return ERROR_OK;
+				}
+
+				command_print(CMD_CTX, "cp0 reg %" PRIi32 ", select %" PRIi32 ": %8.8" PRIx32,
+							  cp0_reg, cp0_sel, value);
+			}
 		} else if (CMD_ARGC == 3) {
+			uint32_t cp0_reg, cp0_sel;
 			uint32_t value;
+
 			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], value);
 			retval = mips32_cp0_write(ejtag_info, value, cp0_reg, cp0_sel);
 			if (retval != ERROR_OK) {
@@ -1552,7 +1609,7 @@ static const struct command_registration mips_m4k_exec_command_handlers[] = {
 		.name = "cp0",
 		.handler = mips_m4k_handle_cp0_command,
 		.mode = COMMAND_EXEC,
-		.usage = "regnum [value]",
+		.usage = "[[reg_name | regnum] [value]]",
 		.help = "display/modify cp0 register",
 	},
 	{

@@ -95,16 +95,39 @@ static const struct {
     { 37, "pc" },
 };
 
+ static const struct {
+    unsigned reg;
+    const char *name;
+} mips32_dsp_regs[MIPS32NUMDSPREGS] = {
+	{ 1, "hi1"},
+	{ 2, "hi2"},
+	{ 3, "hi3"},
+	{ 1, "lo1"},
+	{ 2, "lo2"},
+	{ 3, "lo3"},
+	{ 0, "DSPControl"},
+};
+
 /* number of mips dummy fp regs fp0 - fp31 + fsr and fir
  * we also add 18 unknown registers to handle gdb requests */
 
 #define MIPS32NUMFPREGS (34 + 18)
 
 static uint8_t mips32_gdb_dummy_fp_value[] = {0, 0, 0, 0};
+static uint8_t mips32_gdb_dummy_dsp_value[] = {0, 0, 0, 0, 0, 0, 0};
 
 static struct reg mips32_gdb_dummy_fp_reg = {
     .name = "GDB dummy floating-point register",
     .value = mips32_gdb_dummy_fp_value,
+    .dirty = 0,
+    .valid = 1,
+    .size = 32,
+    .arch_info = NULL,
+};
+
+static struct reg mips32_gdb_dummy_dsp_reg = {
+    .name = "GDB dummy DSP",
+    .value = mips32_gdb_dummy_dsp_value,
     .dirty = 0,
     .valid = 1,
     .size = 32,
@@ -168,7 +191,7 @@ static int mips32_write_core_reg(struct target *target, int num)
     struct mips32_common *mips32 = target_to_mips32(target);
 
     if ((num < 0) || (num >= MIPS32NUMCOREREGS))
-	return ERROR_COMMAND_SYNTAX_ERROR;
+		return ERROR_COMMAND_SYNTAX_ERROR;
 
     reg_value = buf_get_u32(mips32->core_cache->reg_list[num].value, 0, 32);
     mips32->core_regs[num] = reg_value;
@@ -186,16 +209,19 @@ int mips32_get_gdb_reg_list(struct target *target, struct reg **reg_list[],
     struct mips32_common *mips32 = target_to_mips32(target);
     int i;
 
-    /* include floating point registers */
-    *reg_list_size = MIPS32NUMCOREREGS + MIPS32NUMFPREGS;
+//	LOG_INFO("mips32_get_gdb_reg_list");
+
+	/* include floating point registers */
+	*reg_list_size = MIPS32NUMCOREREGS + MIPS32NUMFPREGS;
+
     *reg_list = malloc(sizeof(struct reg *) * (*reg_list_size));
 
     for (i = 0; i < MIPS32NUMCOREREGS; i++)
-	(*reg_list)[i] = &mips32->core_cache->reg_list[i];
+		(*reg_list)[i] = &mips32->core_cache->reg_list[i];
 
     /* add dummy floating points regs */
     for (i = MIPS32NUMCOREREGS; i < (MIPS32NUMCOREREGS + MIPS32NUMFPREGS); i++)
-	(*reg_list)[i] = &mips32_gdb_dummy_fp_reg;
+		(*reg_list)[i] = &mips32_gdb_dummy_fp_reg;
 
     return ERROR_OK;
 }
@@ -766,7 +792,7 @@ int mips32_mark_reg_invalid (struct target *target, int reg_num)
     struct mips32_common *mips32 = target_to_mips32(target);
 
 	if (mips32->core_cache->reg_list[reg_num].dirty != 0)
-		LOG_DEBUG("Register %s marked dirty being abandoned", mips32_regs[reg_num]);
+		LOG_DEBUG("Register %s marked dirty being abandoned", mips32_regs[reg_num].name);
 
 	mips32->core_cache->reg_list[reg_num].valid = 0;
 
@@ -804,28 +830,77 @@ COMMAND_HANDLER(mips32_handle_cp0_command)
     }
 
     /* two or more argument, access a single register/select (write if third argument is given) */
-    if (CMD_ARGC < 2)
-		return ERROR_COMMAND_SYNTAX_ERROR;
+    if (CMD_ARGC < 2){
+		uint32_t value;
+
+		if (CMD_ARGC == 0){
+			for (int i = 0; i < MIPS32NUMCP0REGS; i++){
+				retval = mips32_cp0_read(ejtag_info, &value, mips32_cp0_regs[i].reg, mips32_cp0_regs[i].sel);
+				if (retval != ERROR_OK) {
+					command_print(CMD_CTX, "couldn't access reg %s", mips32_cp0_regs[i].name);
+					return ERROR_OK;
+				}
+
+				command_print(CMD_CTX, "%*s: 0x%8.8x", 14, mips32_cp0_regs[i].name, value);
+			}
+		}
+		else {
+
+			for (int i = 0; i < MIPS32NUMCP0REGS; i++){
+				/* find register name */
+				if (strcmp(mips32_cp0_regs[i].name, CMD_ARGV[0]) == 0){
+					retval = mips32_cp0_read(ejtag_info, &value, mips32_cp0_regs[i].reg, mips32_cp0_regs[i].sel);
+					command_print(CMD_CTX, "0x%8.8x", value);
+					return ERROR_OK;
+				}
+			}
+
+			LOG_ERROR("BUG: register '%s' not found", CMD_ARGV[0]);
+			return ERROR_COMMAND_SYNTAX_ERROR;
+		}
+	}
     else {
-		uint32_t cp0_reg, cp0_sel;
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], cp0_reg);
-		COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], cp0_sel);
-	
 		if (CMD_ARGC == 2) {
 			uint32_t value;
+			char tmp = *CMD_ARGV[0];
 
-			retval = mips32_cp0_read(ejtag_info, &value, cp0_reg, cp0_sel);
-			if (retval != ERROR_OK) {
-				command_print(CMD_CTX,
-							  "couldn't access reg %" PRIi32,
-							  cp0_reg);
-				return ERROR_OK;
+			if (isdigit (tmp) == false) {
+				
+				for (int i = 0; i < MIPS32NUMCP0REGS; i++){
+					/* find register name */
+					if (strcmp(mips32_cp0_regs[i].name, CMD_ARGV[0]) == 0){
+						COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
+						retval = mips32_cp0_write(ejtag_info, value, mips32_cp0_regs[i].reg, mips32_cp0_regs[i].sel);
+						return ERROR_OK;
+					}
+				}
+
+				LOG_ERROR("BUG: register '%s' not found", CMD_ARGV[0]);
+				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
-			command_print(CMD_CTX, "cp0 reg %" PRIi32 ", select %" PRIi32 ": %8.8" PRIx32,
-						  cp0_reg, cp0_sel, value);
+			else {
+				uint32_t cp0_reg, cp0_sel;
 
+				COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], cp0_reg);
+				COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], cp0_sel);
+
+				retval = mips32_cp0_read(ejtag_info, &value, cp0_reg, cp0_sel);
+				if (retval != ERROR_OK) {
+					command_print(CMD_CTX,
+								  "couldn't access reg %" PRIi32,
+								  cp0_reg);
+					return ERROR_OK;
+				}
+
+				command_print(CMD_CTX, "cp0 reg %" PRIi32 ", select %" PRIi32 ": %8.8" PRIx32,
+							  cp0_reg, cp0_sel, value);
+			}
 		} else if (CMD_ARGC == 3) {
+			uint32_t cp0_reg, cp0_sel;
 			uint32_t value;
+
+			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], cp0_reg);
+			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], cp0_sel);
 			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], value);
 			retval = mips32_cp0_write(ejtag_info, value, cp0_reg, cp0_sel);
 			if (retval != ERROR_OK) {
@@ -836,6 +911,92 @@ COMMAND_HANDLER(mips32_handle_cp0_command)
 			}
 			command_print(CMD_CTX, "cp0 reg %" PRIi32 ", select %" PRIi32 ": %8.8" PRIx32,
 						  cp0_reg, cp0_sel, value);
+		}
+    }
+
+    return ERROR_OK;
+}
+
+COMMAND_HANDLER(mips32_handle_dsp_command)
+{
+    int retval;
+    struct target *target = get_current_target(CMD_CTX);
+    struct mips32_common *mips32 = target_to_mips32(target);
+    struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+
+    retval = mips32_verify_pointer(CMD_CTX, mips32);
+    if (retval != ERROR_OK)
+		return retval;
+
+    if (target->state != TARGET_HALTED) {
+		command_print(CMD_CTX, "target must be stopped for \"%s\" command", CMD_NAME);
+		return ERROR_OK;
+    }
+
+	/* Check if DSP access supported or not */
+	if ((mips32->mmips != MIPS32_ONLY) && (mips32->dsp_implemented == DSP_NOT_IMP)) {
+
+		/* Issue Error Message */
+		command_print(CMD_CTX, "DSP not implemented by this processor");
+		return ERROR_OK;
+	}
+
+	if (mips32->dsp_rev != DSP_REV2) {
+		command_print(CMD_CTX, "only DSP Rev 2 supported by this processor");
+		return ERROR_OK;
+	}
+
+    /* two or more argument, access a single register/select (write if third argument is given) */
+    if (CMD_ARGC < 2){
+		uint32_t value;
+
+		if (CMD_ARGC == 0){
+			value = 0;
+			for (int i = 0; i < MIPS32NUMDSPREGS; i++){
+				// retval = mips32_dsp_read(ejtag_info, &value, mips32_dsp_regs[i].reg);
+				if (retval != ERROR_OK) {
+					command_print(CMD_CTX, "couldn't access reg %s", mips32_dsp_regs[i].name);
+					return ERROR_OK;
+				}
+
+				command_print(CMD_CTX, "%*s: 0x%8.8x", 10, mips32_dsp_regs[i].name, value);
+			}
+		}
+		else {
+			value = 0;
+			for (int i = 0; i < MIPS32NUMDSPREGS; i++){
+				/* find register name */
+				if (strcmp(mips32_dsp_regs[i].name, CMD_ARGV[0]) == 0){
+					// retval = mips32_dsp_read(ejtag_info, &value, mips32_dsp_regs[i].reg);
+					command_print(CMD_CTX, "0x%8.8x", value);
+					return ERROR_OK;
+				}
+			}
+
+			LOG_ERROR("BUG: register '%s' not found", CMD_ARGV[0]);
+			return ERROR_COMMAND_SYNTAX_ERROR;
+		}
+	}
+    else {
+		if (CMD_ARGC == 2) {
+			uint32_t value;
+			char tmp = *CMD_ARGV[0];
+
+			if (isdigit (tmp) == false) {
+				
+				for (int i = 0; i < MIPS32NUMCP0REGS; i++){
+					/* find register name */
+					if (strcmp(mips32_dsp_regs[i].name, CMD_ARGV[0]) == 0){
+						COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
+//						retval = mips32_dsp_write(ejtag_info, value, mips32_dsp_regs[i].reg, mips32_dsp_regs[i].sel);
+						return retval;
+					}
+				}
+
+				LOG_ERROR("BUG: register '%s' not found", CMD_ARGV[0]);
+				return ERROR_COMMAND_SYNTAX_ERROR;
+			}
+		} else if (CMD_ARGC == 3) {
 		}
     }
 
@@ -947,6 +1108,7 @@ COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
 
 	return ERROR_OK;
 }
+
 COMMAND_HANDLER(mips32_handle_mark_reg_invalid)
 {
 	struct target *target = get_current_target(CMD_CTX);
@@ -991,7 +1153,7 @@ static const struct command_registration mips32_exec_command_handlers[] = {
 		.name = "cp0",
 		.handler = mips32_handle_cp0_command,
 		.mode = COMMAND_EXEC,
-		.usage = "regnum select [value]",
+		.usage = "[[reg_name/regnum select] [value]]",
 		.help = "display/modify cp0 register",
     },
 	{
@@ -1019,7 +1181,14 @@ static const struct command_registration mips32_exec_command_handlers[] = {
 		.name = "mark_reg_invalid",
 		.handler = mips32_handle_mark_reg_invalid,
 		.mode = COMMAND_ANY,
-		.help = "display/set scan delay in nano seconds",
+		.help = "mark cached register invalid",
+		.usage = "[value]",
+    },
+    {
+		.name = "dsp",
+		.handler = mips32_handle_dsp_command,
+		.mode = COMMAND_ANY,
+		.help = "display/set DSP registers",
 		.usage = "[value]",
     },
     COMMAND_REGISTRATION_DONE
