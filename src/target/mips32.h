@@ -78,44 +78,44 @@ static const struct {
 	unsigned sel;
     const char *name;
 } mips32_cp0_regs[MIPS32NUMCP0REGS] = {
-	{ 4, 2, "UserLocal"},
-	{ 7, 0, "HWREna"},
-	{ 8, 0, "BadVAddr"},
-	{ 9, 0, "Count"},
-	{11, 0, "Compare"},
-	{12, 0, "Status"},
-	{12, 1, "IntCtl"},
-	{12, 2, "SRSCtl"},
-	{12, 4, "View_IPL"},
-	{13, 0, "Cause"},
-	{13, 5, "NestedExc"},
-	{14, 0, "EPC"},
-	{14, 2, "NestedEPC"},
-	{15, 0, "PRId"},
-	{15, 1, "EBase"},
-	{15, 2, "CDMMBase"},
-	{16, 0, "Config"},
-	{16, 1, "Config1"},
-	{16, 2, "Config2"},
-	{16, 3, "Config3"},
-	{16, 4, "Config4"},
-	{16, 5, "Config5"},
-	{16, 7, "Config7"},
-	{17, 0, "LLAddr"},
-	{23, 0, "Debug"},
-	{23, 1,  "TraceControl"},
-	{23, 2, "TraceControl2"},
-	{23, 3, "UserTraceData1"},
-	{23, 4, "TraceBPC"},
-	{24, 0, "DEPC"},
-	{24, 3, "UserTraceData2"},
-	{25, 0, "PerfCtl0"},
-	{25, 1, "PerfCnt0"},
-	{25, 2, "PerfCtl1"},
-	{25, 3, "PerfCnt1"},
-	{26, 0, "ErrCtl"},
-	{30, 0, "ErrorEPC"},
-	{31, 0, "DESAVE"},
+	{ 4, 2, "userlocal"},
+	{ 7, 0, "hwrena"},
+	{ 8, 0, "badvaddr"},
+	{ 9, 0, "count"},
+	{11, 0, "compare"},
+	{12, 0, "status"},
+	{12, 1, "intctl"},
+	{12, 2, "srsctl"},
+	{12, 4, "view_ipl"},
+	{13, 0, "cause"},
+	{13, 5, "nestedexc"},
+	{14, 0, "epc"},
+	{14, 2, "nestedepc"},
+	{15, 0, "prid"},
+	{15, 1, "ebase"},
+	{15, 2, "cdmmbase"},
+	{16, 0, "config"},
+	{16, 1, "config1"},
+	{16, 2, "config2"},
+	{16, 3, "config3"},
+	{16, 4, "config4"},
+	{16, 5, "config5"},
+	{16, 7, "config7"},
+	{17, 0, "lladdr"},
+	{23, 0, "debug"},
+	{23, 1, "tracecontrol"},
+	{23, 2, "tracecontrol2"},
+	{23, 3, "usertracedata1"},
+	{23, 4, "tracebpc"},
+	{24, 0, "depc"},
+	{24, 3, "usertracedata2"},
+	{25, 0, "perfctl0"},
+	{25, 1, "perfcnt0"},
+	{25, 2, "perfctl1"},
+	{25, 3, "perfcnt1"},
+	{26, 0, "errctl"},
+	{30, 0, "errorepc"},
+	{31, 0, "desave"},
 };
 
 enum mips32_isa_mode {
@@ -534,9 +534,146 @@ struct mips32_algorithm {
 #define MIPS32_DRET					0x4200001F
 #define MIPS32_SDBBP				0x7000003F	/* MIPS32_J_INST(MIPS32_OP_SPECIAL2, MIPS32_OP_SDBBP) */
 #define MIPS16_SDBBP				0xE801
-//#define MICRO_MIPS32_SDBBP			0x0000DB7C
+
 #define MICRO_MIPS32_SDBBP			0x000046C0
 #define MICRO_MIPS_SDBBP			0x46C0
+
+
+#define MIPS32_DSP_ENABLE   0x1000000
+
+#define MICRO_MIPS_OP_MFHI	0x007C
+#define MICRO_MIPS_OP_MFLO	0x107C
+
+#define MICRO_MIPS_OP_MTHI	0x207C
+#define MICRO_MIPS_OP_MTLO	0x307C
+
+#define MICRO_DSP_I_INST(rs, ac, opcode) \
+	((0 << 21) | ((rs) << 16) | ((ac) << 14) | (opcode))
+
+#define MICRO_DSP_MFLO(reg, ac)	MICRO_DSP_I_INST(reg, ac, MICRO_MIPS_OP_MFLO)
+#define MICRO_DSP_MFHI(reg, ac)	MICRO_DSP_I_INST(reg, ac, MICRO_MIPS_OP_MFHI)
+#define MICRO_DSP_MTLO(reg, ac)	MICRO_DSP_I_INST(reg, ac, MICRO_MIPS_OP_MTLO)
+#define MICRO_DSP_MTHI(reg, ac)	MICRO_DSP_I_INST(reg, ac, MICRO_MIPS_OP_MTHI)
+
+
+#define MICRO_MIPS_OP_RDDSP		0x067C
+#define MICRO_MIPS_OP_WRDSP		0x167C
+
+#define MICRO_DSP_R_INST(rt, mask, opcode) \
+	((0 << 26) | ((rt) << 21) | ((mask) << 14) | (opcode))
+
+#define MICRO_DSP_RDDSP(rt, mask)	MICRO_DSP_R_INST(rt, mask, MICRO_MIPS_OP_RDDSP)
+#define MICRO_DSP_WRDSP(rt, mask)	MICRO_DSP_R_INST(rt, mask, MICRO_MIPS_OP_WRDSP)
+
+#define CPUTYPE_UNKNOWN 0
+
+//DEVICE: cpu information
+enum CPU_TYPE { MIPS_4Kc, MIPS_4Km, MIPS_4Kp, MIPS_4KEc, MIPS_4KEm, MIPS_4KEp, MIPS_4KSc, MIPS_4KSd,
+	   MIPS_M4K, MIPS_24Kc, MIPS_24Kf, MIPS_24KEc, MIPS_24KEf, MIPS_34Kc, MIPS_34Kf,
+	   MIPS_5Kc, MIPS_5Kf, MIPS_5KEc, MIPS_5KEf, MIPS_20Kc, MIPS_25Kf,
+	   MIPS_AU1000, MIPS_AU1100, MIPS_AU1200, MIPS_AU1500, MIPS_AU1550,
+	   MIPS_74Kc, MIPS_74Kf, MIPS_84Kc, MIPS_84Kf, MIPS_BCM,
+	   MIPS_1004Kc, MIPS_1004Kf, MIPS_1074Kc, MIPS_1074Kf, MIPS_M14Kc, MIPS_M14K, MIPS_M14Kf, 
+	   MIPS_MP32, MIPS_M14KE, MIPS_M14KEc, MIPS_PROAPTIV, MIPS_PROAPTIV_CM,
+	   MIPS_INTERAPTIV, MIPS_INTERAPTIV_CM,
+	   MIPS_M14KEf, MIPS_M14KEcf,
+	   MIPS_M5100, MIPS_M5150,
+	   MIPS_P5600, MIPS_I5500,
+};
+
+enum CPU_VENDOR {
+	MIPS_CORE,
+	ALCHEMY_CORE, 
+	BROADCOM_CORE,
+	ALTERA_CORE,
+};
+
+enum CPU_INSTRUCTION_SET {
+	MIPS16,
+	MIPS32,
+	MIPS64,
+	MICROMIPS_ONLY,
+	MIPS32_AT_RESET_AND_MICROMIPS,
+	MICROMIPS_AT_RESET_AND_MIPS32, 
+};
+
+enum EJTAG_VERSION {
+	EJTAG_VER_UNKNOWN,
+	EJTAG_2_0,
+	EJTAG_2_5,
+	EJTAG_2_6,
+	EJTAG_3_1,
+	EJTAG_4_0, 
+	EJTAG_5_0,
+};
+
+typedef struct {
+	enum CPU_TYPE cpuCore;				// type of CPU  (4Kc, 24Kf, etc.)
+	uint32_t cpuType;					// internal representation of cpu type
+	enum CPU_VENDOR vendor;				// who makes the CPU:
+	enum CPU_INSTRUCTION_SET instSet;	// MIPS16, MIPS32, microMIPS.
+	uint32_t prid;					// processor's prid
+	uint32_t numRegs;					//number of registers (same as calling HdiDeviceRegisterTotalGet)
+	uint32_t numInstBkpts;			// number of instruction breakpoints in this CPU
+	uint32_t numDataBkpts;			// number of data breakpoints in this CPU
+	uint32_t numTcbTrig;				// number of TCB triggers in this CPU
+	BOOLEAN pdtrace;				// CPU has trace?
+	BOOLEAN asidInstBkpts;			// asid specification supported in Inst Bkpts?
+	BOOLEAN asidDataBkpts;			// asid specification supported in Data Bkpts?
+	BOOLEAN sharedInstBkpts;		// Are inst bkpts shared between VPE's
+	BOOLEAN sharedDataBkpts;		// Are data bkpts shared between VPE's
+	BOOLEAN armedInstBkpts;			// Do inst bkpts have armed triggering
+	BOOLEAN armedDataBkpts;			// Do inst bkpts have armed triggering
+	uint32_t bkptRangePresent;        // Bitmask indicating which triggers have address ranging capability (bit 0-15 = inst, 16=31 = data)
+	uint32_t tcbrev;					// TCB revision number
+	uint32_t tcbCpuBits;				// Number of bits in the CPU field of trace words
+	uint32_t tcbVmodes;				// Vmodes field (1=lsa supported, 2=lsad supported)
+	BOOLEAN pcTraceForcedOn;		// TRUE if hardware always collects PC trace
+	BOOLEAN mtase;					// CPU has MultiThreading extension?
+	BOOLEAN dspase;					// CPU has DSP extension?
+	BOOLEAN smase;					// CPU has SmartMIPS extension?
+	BOOLEAN m16ase;					// CPU has MIPS16[e] extension?
+	BOOLEAN micromipsase;			// CPU has microMIPS extension?
+	BOOLEAN vzase;                              // CPU has Virtualization ASE?
+	BOOLEAN vzGuestId;                              // CPU has Virtualization ASE and supports Guest ID?
+	BOOLEAN profiling;				// Is profiling present?
+	BOOLEAN fpuPresent;				// CPU has floating point unit?
+	BOOLEAN pcSampSupported;		// CPU has PC Sampling capability
+	BOOLEAN DASampSupported;			// CPU has Data Address Sampling capability
+	uint32_t cpuid;					// ebase.cpuid number
+	uint32_t vpeid;					// VPE id number
+	uint32_t numtc;					// Number of TC's in this processor
+	uint32_t numvpe;					// Number of VPE's in this processor
+	uint32_t numitc;					// Number of ITC cells in this processor
+	BOOLEAN offchip;				// Sofware supports off-chip trace?
+	BOOLEAN onchip;					// Sofware supports on-chip trace?
+	BOOLEAN hwoffchip;				// CPU hardware supported off-chip trace?
+	BOOLEAN hwonchip;					// CPU hardware supported on-chip trace?
+	BOOLEAN iFlowtrace;				// CPU has iFlowtrace (tm)?
+	BOOLEAN cbtrig;					// CPU has complex break and trigger block?
+	BOOLEAN cbtrigPassCounters;		//CBT pass counters present?
+	BOOLEAN cbtrigTuples;			//CBT tuples present?
+	BOOLEAN cbtrigDataQualifiers;	//CBT data qualifiers present?
+	BOOLEAN cbtrigPrimedBreaks;		//CBT primed breaks present?
+	BOOLEAN cbtrigStopWatch;		//CBT stop watch present?
+	BOOLEAN cbtrigNot;				//CBT not (invert data value match) supported?
+	BOOLEAN pmtrace;				//Does system have performance monitor trace?
+	uint32_t adsize;					//Address size
+	enum EJTAG_VERSION ejtagVersion;			//EJTAG version
+	uint32_t iCacheSize;
+	uint32_t dCacheSize;
+	BOOLEAN mmuType;
+	uint32_t tlbEntries;
+	BOOLEAN fdcPresent;
+	BOOLEAN evaPresent;	// Enhanced virtual address (introduced with proAptiv).
+	BOOLEAN systemTracePresent;
+	uint32_t numshadowregs;
+	uint32_t impcode;
+	uint32_t idcode;
+	uint32_t onchipSize;
+	BOOLEAN cmPresent;
+	BOOLEAN msaPresent;
+} CPU_INFO;
 
 extern const struct command_registration mips32_command_handlers[];
 
@@ -573,4 +710,5 @@ int mips32_blank_check_memory(struct target *target,
 		uint32_t address, uint32_t count, uint32_t *blank);
 
 int mips32_mark_reg_invalid (struct target *, int);
+uint32_t DetermineCpuTypeFromPrid(uint32_t prid, uint32_t config, uint32_t config1);
 #endif	/*MIPS32_H*/

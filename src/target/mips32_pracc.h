@@ -107,4 +107,7 @@ int mips32_cp0_read(struct mips_ejtag *ejtag_info,
 int mips32_cp0_write(struct mips_ejtag *ejtag_info,
 		uint32_t val, uint32_t cp0_reg, uint32_t cp0_sel);
 
+int mips32_pracc_read_dsp_regs(struct mips_ejtag *ejtag_info, uint32_t *val, uint32_t regs);
+int mips32_pracc_write_dsp_regs(struct mips_ejtag *ejtag_info, uint32_t val, uint32_t regs);
+
 #endif

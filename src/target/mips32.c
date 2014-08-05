@@ -99,13 +99,13 @@ static const struct {
     unsigned reg;
     const char *name;
 } mips32_dsp_regs[MIPS32NUMDSPREGS] = {
-	{ 1, "hi1"},
-	{ 2, "hi2"},
-	{ 3, "hi3"},
-	{ 1, "lo1"},
-	{ 2, "lo2"},
-	{ 3, "lo3"},
-	{ 0, "DSPControl"},
+	{ 0, "hi1"},
+	{ 1, "hi2"},
+	{ 2, "hi3"},
+	{ 3, "lo1"},
+	{ 4, "lo2"},
+	{ 5, "lo3"},
+	{ 6, "control"},
 };
 
 /* number of mips dummy fp regs fp0 - fp31 + fsr and fir
@@ -953,13 +953,13 @@ COMMAND_HANDLER(mips32_handle_dsp_command)
 		if (CMD_ARGC == 0){
 			value = 0;
 			for (int i = 0; i < MIPS32NUMDSPREGS; i++){
-				// retval = mips32_dsp_read(ejtag_info, &value, mips32_dsp_regs[i].reg);
+				retval = mips32_pracc_read_dsp_regs(ejtag_info, &value, mips32_dsp_regs[i].reg);
+//				retval = mips32_pracc_read_dsp_regs(ejtag_info, &value, i);
 				if (retval != ERROR_OK) {
 					command_print(CMD_CTX, "couldn't access reg %s", mips32_dsp_regs[i].name);
-					return ERROR_OK;
+					return retval;
 				}
-
-				command_print(CMD_CTX, "%*s: 0x%8.8x", 10, mips32_dsp_regs[i].name, value);
+				command_print(CMD_CTX, "%*s: 0x%8.8x", 7, mips32_dsp_regs[i].name, value);
 			}
 		}
 		else {
@@ -967,9 +967,9 @@ COMMAND_HANDLER(mips32_handle_dsp_command)
 			for (int i = 0; i < MIPS32NUMDSPREGS; i++){
 				/* find register name */
 				if (strcmp(mips32_dsp_regs[i].name, CMD_ARGV[0]) == 0){
-					// retval = mips32_dsp_read(ejtag_info, &value, mips32_dsp_regs[i].reg);
+					retval = mips32_pracc_read_dsp_regs(ejtag_info, &value, mips32_dsp_regs[i].reg);
 					command_print(CMD_CTX, "0x%8.8x", value);
-					return ERROR_OK;
+					return retval;
 				}
 			}
 
@@ -988,7 +988,7 @@ COMMAND_HANDLER(mips32_handle_dsp_command)
 					/* find register name */
 					if (strcmp(mips32_dsp_regs[i].name, CMD_ARGV[0]) == 0){
 						COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], value);
-//						retval = mips32_dsp_write(ejtag_info, value, mips32_dsp_regs[i].reg, mips32_dsp_regs[i].sel);
+						retval = mips32_pracc_write_dsp_regs (ejtag_info, value, mips32_dsp_regs[i].reg);
 						return retval;
 					}
 				}
@@ -997,21 +997,683 @@ COMMAND_HANDLER(mips32_handle_dsp_command)
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 		} else if (CMD_ARGC == 3) {
+
+			LOG_INFO ("???");
 		}
     }
 
     return ERROR_OK;
 }
 
+
+uint32_t DetermineCpuTypeFromPrid(uint32_t prid, uint32_t config, uint32_t config1) {
+
+	uint32_t cpuType;
+	// Determine CPU type from PRID.
+	if (((prid >> 16) & 0xff) == 16)
+		// Altera
+		return (uint32_t)MIPS_MP32;
+
+	if (((prid >> 16) & 0xff) == 2)
+		// Broadcom
+		return (uint32_t) MIPS_BCM;
+
+	if (((prid >> 16) & 0xff) == 3) {
+		// AMD Alchemy processors
+		switch ((prid >> 24) & 0xff)
+		{
+			case 0x00:
+				cpuType = MIPS_AU1000;
+				break;
+					   
+			case 0x01:
+				cpuType = MIPS_AU1500;
+				break;
+
+			case 0x02:
+				cpuType = MIPS_AU1100;
+				break;
+
+			case 0x03:
+				cpuType = MIPS_AU1550;
+				break;
+
+			case 0x04:
+				cpuType = MIPS_AU1200;
+				break;
+			default:
+				cpuType = CPUTYPE_UNKNOWN;
+				break;
+		} /* end of switch */
+
+		return cpuType;
+	}
+
+	switch ((prid >> 8) & 0xff)
+	{    // MIPS Technologies cores
+		case 0x80:
+			cpuType = MIPS_4Kc;
+			break;
+
+		case 0x81:
+			if (config1 & 1)
+				cpuType = MIPS_5Kf;       // fpu present
+			else 
+				cpuType = MIPS_5Kc;
+			break;
+
+		case 0x82:
+			cpuType = MIPS_20Kc;
+			break;
+
+		case 0x83:
+			if ((config >> 20) & 1)
+				cpuType = MIPS_4Kp;
+			else
+				cpuType = MIPS_4Km;
+			break;
+					   
+		case 0x84:
+		case 0x90:
+			cpuType = MIPS_4KEc;
+			break;
+
+		case 0x85:
+		case 0x91:
+			if ((config >> 20) & 1) 
+				cpuType = MIPS_4KEp;
+			else
+				cpuType = MIPS_4KEm;
+			break;
+					   
+		case 0x86:
+			cpuType = MIPS_4KSc;
+			break;
+
+		case 0x87:
+			cpuType = MIPS_M4K;
+			break;
+
+		case 0x88:
+			cpuType = MIPS_25Kf;
+			break;
+
+		case 0x89:
+			if (config1 & 1)
+				cpuType = MIPS_5KEf;       // fpu present
+			else
+				cpuType = MIPS_5KEc;
+			break;
+
+		case 0x92:
+			cpuType = MIPS_4KSd;
+			break;
+
+		case 0x93:
+			if (config1 & 1)
+				cpuType = MIPS_24Kf;       // fpu present
+			else
+				cpuType = MIPS_24Kc;
+			break;
+
+		case 0x95:
+			if (config1 & 1)
+				cpuType = MIPS_34Kf;       // fpu present
+			else {
+				// In MT with a single-threaded FPU, Config1.FP may be 0
+				// even though an FPU exists.  Scan all TC contexts and if
+				// any have Config1.FP, then set processor to 100Kf.
+				// skip it for now
+				cpuType = MIPS_34Kc;
+			}
+			break;
+
+		case 0x96:
+			if (config1 & 1)
+				cpuType = MIPS_24KEf;       // fpu present
+			else
+				cpuType = MIPS_24KEc;
+			break;
+
+		case 0x97:
+			if (config1 & 1)
+				cpuType = MIPS_74Kf;       // fpu present
+			else 
+				cpuType = MIPS_74Kc;
+			break;
+
+		case 0x99:
+			if (config1 & 1) 
+				cpuType = MIPS_1004Kf;       // fpu present
+			else {
+				// In MT with a single-threaded FPU, Config1.FP may be 0
+				// even though an FPU exists.  Scan all TC contexts and if
+				// any have Config1.FP, then set processor to 100Kf.
+				// skip it for now
+				cpuType = MIPS_1004Kc;
+			}
+			break;
+
+		case 0x9A:
+			if (config1 & 1)
+				cpuType = MIPS_1074Kf;       // fpu present
+			else {
+				// In MT with a single-threaded FPU, Config1.FP may be 0
+				// even though an FPU exists.  Scan all TC contexts and if
+				// any have Config1.FP, then set processor to 100Kf.
+				// skip it for now
+				cpuType = MIPS_1074Kc;
+			}
+			break;
+
+		case 0x9B:
+			cpuType = MIPS_M14K;
+			break;
+
+		case 0x9C:
+			if (config1& 1)
+				cpuType = MIPS_M14Kf;       // fpu present
+			else
+				cpuType = MIPS_M14Kc;
+			break;
+			   
+		case 0x9D:
+			if (config1 & 1)
+				cpuType = MIPS_M14KEf;
+			else
+				cpuType = MIPS_M14KE;
+			break;
+
+		case 0x9E:
+			if (config1 & 1)
+				cpuType = MIPS_M14KEcf;
+			else 
+				cpuType = MIPS_M14KEc;
+			break;
+
+		case 0xA0:
+			cpuType = MIPS_INTERAPTIV;
+			break;
+
+		case 0xA1:
+			cpuType = MIPS_INTERAPTIV_CM;
+			break;
+
+		case 0xA2:
+			cpuType = MIPS_PROAPTIV;
+			break;
+
+		case 0xA3:
+			cpuType = MIPS_PROAPTIV_CM;
+			break;
+
+		case 0xA6:
+			cpuType = MIPS_M5100;
+			break;
+
+		case 0xA7:
+			cpuType = MIPS_M5150;
+			break;
+
+		case 0xA8:
+			cpuType = MIPS_P5600;
+			break;
+
+		case 0xA9:
+			cpuType = MIPS_I5500;
+			break;
+
+		default:
+			cpuType = CPUTYPE_UNKNOWN;
+			break;
+	} /* end of switch */
+	
+	return (cpuType);
+}
+
+
 COMMAND_HANDLER(mips32_handle_cpuinfo_command)
 {
+    int retval;
+    struct target *target = get_current_target(CMD_CTX);
+    struct mips32_common *mips32 = target_to_mips32(target);
+    struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+
+	CPU_INFO info;
+	char text[40]={0};
+	int mip_core = true;
+
+	uint32_t    prid; /* cp0 PRID - 15, 0 */
+	uint32_t  config; /*	cp0 config - 16, 0 */
+	uint32_t config1; /*	cp0 config - 16, 1 */
+	uint32_t config2; /*	cp0 config - 16, 2 */
+	uint32_t config3; /*	cp0 config - 16, 3 */
+	uint32_t config4; /*	cp0 config - 16, 4 */
+	uint32_t config5; /*	cp0 config - 16, 5 */
+	uint32_t config7; /*	cp0 config - 16, 7 */
+
 	LOG_INFO ("CMD_ARGC: %d", CMD_ARGC);
 
 	/* No arg.s for now */
 	if (CMD_ARGC >= 1)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	LOG_INFO ("cpuinfo");
+	/* Read PRID and config registers */
+	retval = mips32_cp0_read(ejtag_info, &prid, 15, 0);
+	retval = mips32_cp0_read(ejtag_info, &config, 16, 0);
+	retval = mips32_cp0_read(ejtag_info, &config1, 16, 1);
+	retval = mips32_cp0_read(ejtag_info, &config2, 16, 2);
+	retval = mips32_cp0_read(ejtag_info, &config3, 16, 3);
+	retval = mips32_cp0_read(ejtag_info, &config4, 16, 4);
+	retval = mips32_cp0_read(ejtag_info, &config5, 16, 5);
+	retval = mips32_cp0_read(ejtag_info, &config7, 16, 7);
+
+	info.cpuType = DetermineCpuTypeFromPrid(prid, config, config1);
+
+	LOG_INFO ("cpuinfo - prid: 0x%8.8x (0x%8.8x)", prid, ((prid & 0x000ff00) >> 8));
+
+	switch (info.cpuType) {
+      case MIPS_4Kc:
+		  info.cpuCore = MIPS_4Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4Kc");
+		  break;
+
+      case MIPS_4Km:
+		  info.cpuCore = MIPS_4Km;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4Km");
+		  break;
+
+      case MIPS_4Kp:
+		  info.cpuCore = MIPS_4Kp;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4Kp");
+		  break;
+
+      case MIPS_4KEc:
+		  info.cpuCore = MIPS_4KEc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4KEc");		  
+		  break;
+
+      case MIPS_4KEm:
+		  info.cpuCore = MIPS_4KEm;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4KEm");
+		  break;
+      case MIPS_4KEp:
+		  info.cpuCore = MIPS_4KEp;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4KEp");
+		  break;
+
+      case MIPS_4KSc:
+		  info.cpuCore = MIPS_4KSc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4KSc");
+		  break;
+
+      case MIPS_4KSd:
+		  info.cpuCore = MIPS_4KSd;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4KSd");
+		  break;
+
+      case MIPS_M4K:
+		  info.cpuCore = MIPS_M4K;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "4K");
+		  break;
+
+      case MIPS_24Kc:
+		  info.cpuCore = MIPS_24Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "24Kc");
+		  break;
+
+      case MIPS_24Kf:
+		  info.cpuCore = MIPS_24Kf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "24Kf");
+		  break;
+
+      case MIPS_24KEc:
+		  info.cpuCore = MIPS_24KEc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "24KEc");
+		  break;
+
+      case MIPS_24KEf:
+		  info.cpuCore = MIPS_24KEf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "24KEf");
+		  break;
+
+      case MIPS_34Kc:
+		  info.cpuCore = MIPS_34Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "34Kc");
+		  break;
+
+      case MIPS_34Kf:
+		  info.cpuCore = MIPS_34Kf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "3Kf ");
+		  break;
+
+      case MIPS_5Kc:
+		  info.cpuCore = MIPS_5Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS64;
+		  strcpy(text, "5Kc");
+		  break;
+
+      case MIPS_5Kf:
+		  info.cpuCore = MIPS_5Kf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS64;
+		  strcpy(text, "5Kf");
+		  break;
+
+      case MIPS_5KEc:
+		  info.cpuCore = MIPS_5KEc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS64;
+		  strcpy(text, "5KEc");
+		  break;
+
+      case MIPS_5KEf:
+		  info.cpuCore = MIPS_5KEf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS64;
+		  strcpy(text, "5KEf");
+		  break;
+
+      case MIPS_20Kc:
+		  info.cpuCore = MIPS_20Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS64;
+		  strcpy(text, "20Kc");
+		  break;
+
+      case MIPS_25Kf:
+		  info.cpuCore = MIPS_25Kf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS64;
+		  strcpy(text, "25Kf");
+		  break;
+
+      case MIPS_AU1000:
+		  info.cpuCore = MIPS_AU1000;
+		  info.vendor = ALCHEMY_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "AU1000");
+		  break;
+      case MIPS_AU1100:
+		  info.cpuCore = MIPS_AU1100;
+		  info.vendor = ALCHEMY_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "AU1100");
+		  break;
+
+      case MIPS_AU1200:
+		  info.cpuCore = MIPS_AU1200;
+		  info.vendor = ALCHEMY_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "AU1200");
+		  break;
+
+      case MIPS_AU1500:
+		  info.cpuCore = MIPS_AU1500;
+		  info.vendor = ALCHEMY_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "AU1500");
+		  break;
+
+      case MIPS_AU1550:
+		  info.cpuCore = MIPS_AU1550;
+		  info.vendor = ALCHEMY_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "AU1550");
+		  break;
+
+      case MIPS_74Kc:
+		  info.cpuCore = MIPS_74Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "74Kc");
+		  break;
+
+      case MIPS_74Kf:
+		  info.cpuCore = MIPS_74Kf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "74Kf");
+		  break;
+
+      case MIPS_84Kc:
+		  info.cpuCore = MIPS_84Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "84Kc");
+		  break;
+
+      case MIPS_84Kf:
+		  info.cpuCore = MIPS_84Kf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "84Kf");
+		  break;
+
+      case MIPS_M14K:
+		  info.cpuCore = MIPS_M14K;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "M14K");
+		  break;
+
+      case MIPS_M14Kc:
+		  info.cpuCore = MIPS_M14Kc;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "M14Kc");
+		  break;
+
+      case MIPS_M14Kf:
+		  info.cpuCore = MIPS_M14Kf;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "M14Kf");
+		  break;
+
+      case MIPS_M14KE:
+		  info.cpuCore = MIPS_M14KE;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "microAptiv_UC");
+		  break;
+
+      case MIPS_M14KEf:
+		  info.cpuCore = MIPS_M14KEf;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "microAptiv_UCF");
+		  break;
+
+      case MIPS_M14KEc:
+		  info.cpuCore = MIPS_M14KEc;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "microAptiv_UP");
+		  break;
+
+      case MIPS_M14KEcf:
+		  info.cpuCore = MIPS_M14KEcf;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "microAptiv_UPF");
+		  break;
+
+      case MIPS_M5100:
+		  info.cpuCore = MIPS_M5100;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "M5100");
+		  break;
+
+      case MIPS_M5150:
+		  info.cpuCore = MIPS_M5150;
+		  info.vendor = MIPS_CORE;
+//		  if ((err = GetM14KInstSet(handle, &info.instSet)) != SUCCESS) return err;
+		  strcpy(text, "M5150");
+		  break;
+
+      case MIPS_BCM:
+		  info.cpuCore = MIPS_BCM;
+		  info.vendor = BROADCOM_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "BCM");
+		  break;
+
+      case MIPS_MP32:
+		  info.cpuCore = MIPS_MP32;
+		  info.vendor = ALTERA_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "MP32");
+		  break;
+
+      case MIPS_1004Kc:
+		  info.cpuCore = MIPS_1004Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "1004Kc");
+		  break;
+
+      case MIPS_1004Kf:
+		  info.cpuCore = MIPS_1004Kf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "1004Kf");
+		  break;
+
+      case MIPS_1074Kc:
+		  info.cpuCore = MIPS_1074Kc;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "1074Kc");
+		  break;
+
+      case MIPS_1074Kf:
+		  info.cpuCore = MIPS_1074Kf;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "1074Kf");
+		  break;
+
+      case MIPS_PROAPTIV:
+		  info.cpuCore = MIPS_PROAPTIV;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "PROAPTIV");
+		  break;
+
+      case MIPS_PROAPTIV_CM:
+		  info.cpuCore = MIPS_PROAPTIV_CM;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "PROAPTIV_CM");
+		  break;
+
+      case MIPS_INTERAPTIV:
+		  info.cpuCore = MIPS_INTERAPTIV;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "INTERAPTIV");
+		  break;
+
+      case MIPS_INTERAPTIV_CM:
+		  info.cpuCore = MIPS_INTERAPTIV_CM;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "INTERAPTIV_CM");
+		  break;
+
+      case MIPS_P5600:
+		  info.cpuCore = MIPS_P5600;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "P5600");
+		  break;
+
+      case MIPS_I5500:
+		  info.cpuCore = MIPS_I5500;
+		  info.vendor = MIPS_CORE;
+		  info.instSet = MIPS32;
+		  strcpy(text, "I5500");
+		  break;
+	}
+
+	LOG_USER ("cpuCore: MIPS_%s", &text[0]);
+	LOG_USER (" Data Cache: ");
+	LOG_USER ("Instr Cache: ");
+
+	LOG_USER ("Max Number of Inst Breakpoints: %d", mips32->num_inst_bpoints);
+
+	/*
+	  {cmPresent 0}
+	  {cpuCore MIPS_microAptiv_UC}
+	  {cpuid 0}
+	  {cpuType 4194336}
+	  {dCache 0x0}
+	  {dspase 1}
+	  {ejtagVersion 5.0}
+	  {iCache 0x0}
+	  {idcode 0x1}
+	  {impcode 0xa1004000}
+	  {instSet microMIPS (at reset) and MIPS32}
+	  {micromipsase 1}
+	  {mmutype FIXED_MAPPING}
+	  {msaPresent 0}
+	  {mtase 0}
+	  {numShadowRegs 0}
+	  {prid 0x1e019d28}
+	  {rtl 0x28}
+	  {tlbEntries 0}
+	  {vendor MIPS}
+	  {vzase 0}
+	  {vzGuestId 0}
+	  {bkptRangePresent 0x3000f}
+	  {cbtrig 0}
+	  {daSampling 1}
+	  {numDataBkpts 2}
+	  {numInstBkpts 4}
+	  {profiling 1}
+	  {hwoffchip 1}
+	  {hwonchip 0}
+	  {iFlowtrace 1}
+	  {offchip 1}
+	  {onchip 0}
+	  {pcTraceForcedOn 1}
+	  {tcbCpuBits 0}
+	  {tcbrev 2}
+	  {tcbVmodes 0}
+	  */
 	return ERROR_OK;
 }
 

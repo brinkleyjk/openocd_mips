@@ -81,6 +81,7 @@
 #include "mips32.h"
 #include "mips32_pracc.h"
 
+#define MIPS32_PRACC_STACK 0xFF204000
 struct mips32_pracc_context {
     /* uint32_t *local_iparam; */
 	/*    int num_iparam; */
@@ -368,7 +369,7 @@ inline void pracc_queue_init(struct pracc_queue_info *ctx)
 
 inline void pracc_add(struct pracc_queue_info *ctx, uint32_t addr, uint32_t instr)
 {
-//	LOG_INFO ("addr: 0x%8.8x   inst: 0x%8.8x", addr, instr);
+	LOG_DEBUG ("addr: 0x%8.8x   inst: 0x%8.8x", addr, instr);
     ctx->pracc_list[ctx->max_code + ctx->code_count] = addr;
     ctx->pracc_list[ctx->code_count++] = instr;
     if (addr)
@@ -661,10 +662,7 @@ int mips32_cp0_write(struct mips_ejtag *ejtag_info, uint32_t val, uint32_t cp0_r
     pracc_add(&ctx, 0, MIPS32_B(NEG16(ctx.code_count + 1)));	/* jump to start */
     pracc_add(&ctx, 0, MIPS32_MFC0(15, 31, 0));					/* move COP0 DeSave to $15 */
 
-//    ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL);
 	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, NULL);
-//	ctx.retval = mips32_pracc_exec(ejtag_info, ctx.code_count, ctx.pracc_list, 0, NULL,
-//								   ctx.store_count, NULL, ctx.code_count - 1);
 
 exit:
     pracc_queue_free(&ctx);
@@ -1125,12 +1123,14 @@ int mips32_pracc_invalidate_cache (struct target *target, struct mips_ejtag *ejt
 		MIPS32_NOP,
     };
 
+#if 0
 	int cache_code_sz[5] = {ARRAY_SIZE(inv_inst_cache),ARRAY_SIZE(inv_data_cache_nowb), 0, 0, 0};
 	uint32_t *inv_cache[5] = {&inv_inst_cache[0],
 							  &inv_data_cache_nowb[0],
 							  NULL,
 							  NULL,
 							  NULL};
+#endif
 
     struct pracc_queue_info ctx = {.max_code = sizeof(inv_inst_cache)/4};
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -1255,6 +1255,7 @@ int mips32_pracc_write_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 
     ejtag_info->reg8 = regs[8];
     ejtag_info->reg9 = regs[9];
+    ejtag_info->reg10 = regs[10];
 exit:
     pracc_queue_free(&ctx);
     return ctx.retval;
@@ -1263,7 +1264,7 @@ exit:
 
 int mips32_pracc_read_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 {
-//	LOG_INFO ("mips32_pracc_read_regs");
+	LOG_INFO ("mips32_pracc_read_regs");
     static int cp0_read_code[] = {
 		MIPS32_MFC0(8, 12, 0),				/* move status to $8 */
 		MIPS32_MFLO(8),						/* move lo to $8 */
@@ -1305,26 +1306,27 @@ int mips32_pracc_read_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 
     ejtag_info->reg8 = regs[8];	/* reg8 is saved but not restored, next called function should restore it */
     ejtag_info->reg9 = regs[9];
+    ejtag_info->reg10 = regs[10];
 exit:
     pracc_queue_free(&ctx);
+
+	LOG_INFO ("exit -> mips32_pracc_read_regs");
+
     return ctx.retval;
 }
 
-int mips32_pracc_read_dsp_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
+int mips32_pracc_read_dsp_regs(struct mips_ejtag *ejtag_info, uint32_t *val, uint32_t regs)
 {
     struct pracc_queue_info ctx = {.max_code = 48};
     static uint32_t dsp_read_code[] = {
-		0x00001052, 	/* mflhxu	v0  */
-		0x00201010, 	/* mfhi	v0,$ac1 */
-		0x00401010, 	/* mfhi	v0,$ac2 */
-		0x00601010, 	/* mfhi	v0,$ac3 */
-		0x00201012, 	/* mflo	v0,$ac1 */
-		0x00401012, 	/* mflo	v0,$ac2 */
-		0x00601012, 	/* mflo	v0,$ac3 */
-		0x7fff14b8, 	/* rddsp	v0  */
+		0x00204010, /* MFHI (t0,1) */
+		0x00404010, /* MFHI (t0,2) */
+		0x00604010, /* MFHI (t0,3) */
+		0x00204012, /* MFLO (t0,1) */
+		0x00404012, /* MFLO (t0,2) */
+		0x00604012, /* MFLO (t0,3) */
+		0x7fff44b8, /* MICRO_DSP_RDDSP (t0,0x1F), */
     };
-
-	LOG_INFO ("mips32_pracc_read_dsp_regs");
 
 	/* check status register to determine if dsp register access is enabled */
 
@@ -1335,21 +1337,103 @@ int mips32_pracc_read_dsp_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
     if (ctx.retval != ERROR_OK)
 		goto exit;
 
-    for (int i = 0; i != 7; i++) {
-		pracc_add(&ctx, 0, dsp_read_code[i]);			        /* load COP0 needed registers to $8 */
-		pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + (i * 4),
-				  MIPS32_SW(2, PRACC_OUT_OFFSET + (i * 4), 1));
-    }
+    pracc_add(&ctx, 0, MIPS32_MTC0(15, 31, 0));					/* move $15 to COP0 DeSave */
+	pracc_add(&ctx, 0, MIPS32_LUI(15, PRACC_UPPER_BASE_ADDR));	/* $15 = MIPS32_PRACC_BASE_ADDR */
 
-    pracc_add(&ctx, 0, MIPS32_B(NEG16(ctx.code_count + 1)));	/* jump to start */
-    pracc_add(&ctx, 0, MIPS32_MFC0(1, 31, 0));			        /* move COP0 DeSave to $1, restore reg1 */
+	/* Save Status Register */
+	pracc_add(&ctx, 0, MIPS32_MFC0(9, 12, 0));					/* move status to $9 (t1) */
 
-	ctx.store_count++;	/* Needed by legacy code, due to offset from reg0 */
+	/* Read it again in order to modify it */
+	pracc_add(&ctx, 0, MIPS32_MFC0(8, 12, 0));					/* move status to $0 (t0) */
 
-	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, regs);
+	/* Enable access to DSP registers by setting MX bit in status register */
+    pracc_add(&ctx, 0, MIPS32_LUI(10, UPPER16(MIPS32_DSP_ENABLE)));		/* $15 = MIPS32_PRACC_STACK */
+	pracc_add(&ctx, 0, MIPS32_ORI(10, 10, LOWER16(MIPS32_DSP_ENABLE)));
+	pracc_add(&ctx, 0, MIPS32_OR(8, 8, 10));
+	pracc_add(&ctx, 0, MIPS32_MTC0(8, 12, 0));					/* Enable DSP - update status registers */
+    pracc_add(&ctx, 0, MIPS32_NOP);						        /* nop */
+    pracc_add(&ctx, 0, MIPS32_NOP);						        /* nop */
 
-//    ejtag_info->reg2 = regs[8];	/* reg8 is saved but not restored, next called function should restore it */
-//    ejtag_info->status = regs[9];
+    pracc_add(&ctx, 0, dsp_read_code[regs]);                    /* move AC or Control to $8 (t0) */
+    pracc_add(&ctx, 0, MIPS32_NOP);								/* nop */
+	pracc_add(&ctx, 0, MIPS32_MTC0(9, 12, 0));					/* Restore status registers to previous setting */
+	pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT, MIPS32_SW(8, PRACC_OUT_OFFSET, 15));	/* store $8 to pracc_out */
+
+    pracc_add(&ctx, 0, MIPS32_MFC0(15, 31, 0));					        /* move COP0 DeSave to $15 */
+    pracc_add(&ctx, 0, MIPS32_LUI(8, UPPER16(ejtag_info->reg8)));		/* restore upper 16 of $8 */
+    pracc_add(&ctx, 0, MIPS32_ORI(8, 8, LOWER16(ejtag_info->reg8)));	/* restore lower 16 of $8 */
+
+    pracc_add(&ctx, 0, MIPS32_LUI(9, UPPER16(ejtag_info->reg9)));		/* restore upper 16 of $9 */
+    pracc_add(&ctx, 0, MIPS32_ORI(9, 9, LOWER16(ejtag_info->reg9)));	/* restore lower 16 of $9 */
+
+    pracc_add(&ctx, 0, MIPS32_LUI(10, UPPER16(ejtag_info->reg10)));		/* restore upper 16 of $10 */
+    pracc_add(&ctx, 0, MIPS32_ORI(10, 10, LOWER16(ejtag_info->reg10)));	/* restore lower 16 of $10 */
+    pracc_add(&ctx, 0, MIPS32_B(NEG16(ctx.code_count + 1)));		/* jump to start */
+    pracc_add(&ctx, 0, MIPS32_NOP);					        /* nop */
+
+	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, val);
+exit:
+    pracc_queue_free(&ctx);
+    return ctx.retval;
+}
+
+int mips32_pracc_write_dsp_regs(struct mips_ejtag *ejtag_info, uint32_t val, uint32_t regs)
+{
+    struct pracc_queue_info ctx = {.max_code = 48};
+    static uint32_t dsp_write_code[] = {
+		0x01000811, /* MTHI (t0,1) */
+		0x01001011, /* MTHI (t0,2) */
+		0x01001811, /* MTHI (t0,3) */
+		0x01000813, /* MTLO (t0,1) */
+		0x01001013, /* MTLO (t0,2) */
+		0x01001813, /* MTLO (t0,3) */
+		0x7d1ffcf8, /* WRDSP (t0,0x1F) */
+    };
+
+	/* Init context queue */
+    pracc_queue_init(&ctx);
+    if (ctx.retval != ERROR_OK)
+		goto exit;
+
+    pracc_add(&ctx, 0, MIPS32_MTC0(15, 31, 0));					/* move $15 to COP0 DeSave */
+	pracc_add(&ctx, 0, MIPS32_LUI(15, PRACC_UPPER_BASE_ADDR));	/* $15 = MIPS32_PRACC_BASE_ADDR */
+
+	/* Save Status Register */
+	pracc_add(&ctx, 0, MIPS32_MFC0(9, 12, 0));					/* move status to $9 (t1) */
+
+	/* Read it again in order to modify it */
+	pracc_add(&ctx, 0, MIPS32_MFC0(8, 12, 0));					/* move status to $0 (t0) */
+
+	/* Enable access to DSP registers by setting MX bit in status register */
+    pracc_add(&ctx, 0, MIPS32_LUI(10, UPPER16(MIPS32_DSP_ENABLE)));		/* $15 = MIPS32_PRACC_STACK */
+	pracc_add(&ctx, 0, MIPS32_ORI(10, 10, LOWER16(MIPS32_DSP_ENABLE)));
+	pracc_add(&ctx, 0, MIPS32_OR(8, 8, 10));
+	pracc_add(&ctx, 0, MIPS32_MTC0(8, 12, 0));					/* Enable DSP - update status registers */
+    pracc_add(&ctx, 0, MIPS32_NOP);						        /* nop */
+    pracc_add(&ctx, 0, MIPS32_NOP);						        /* nop */
+
+    pracc_add(&ctx, 0, MIPS32_LUI(8, UPPER16(val)));			/* Load val to $8 (t0) */
+    pracc_add(&ctx, 0, MIPS32_ORI(8, 8, LOWER16(val)));
+
+    pracc_add(&ctx, 0, dsp_write_code[regs]);                    /* move AC or Control to $8 (t0) */
+
+    pracc_add(&ctx, 0, MIPS32_NOP);								/* nop */
+	pracc_add(&ctx, 0, MIPS32_MTC0(9, 12, 0));					/* Restore status registers to previous setting */
+    pracc_add(&ctx, 0, MIPS32_NOP);								/* nop */
+
+    pracc_add(&ctx, 0, MIPS32_MFC0(15, 31, 0));					        /* move COP0 DeSave to $15 */
+    pracc_add(&ctx, 0, MIPS32_LUI(8, UPPER16(ejtag_info->reg8)));		/* restore upper 16 of $8 */
+    pracc_add(&ctx, 0, MIPS32_ORI(8, 8, LOWER16(ejtag_info->reg8)));	/* restore lower 16 of $8 */
+
+    pracc_add(&ctx, 0, MIPS32_LUI(9, UPPER16(ejtag_info->reg9)));		/* restore upper 16 of $9 */
+    pracc_add(&ctx, 0, MIPS32_ORI(9, 9, LOWER16(ejtag_info->reg9)));	/* restore lower 16 of $9 */
+
+    pracc_add(&ctx, 0, MIPS32_LUI(10, UPPER16(ejtag_info->reg10)));		/* restore upper 16 of $10 */
+    pracc_add(&ctx, 0, MIPS32_ORI(10, 10, LOWER16(ejtag_info->reg10)));	/* restore lower 16 of $10 */
+    pracc_add(&ctx, 0, MIPS32_B(NEG16(ctx.code_count + 1)));		/* jump to start */
+    pracc_add(&ctx, 0, MIPS32_NOP);								 /* nop */
+
+	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, NULL);
 exit:
     pracc_queue_free(&ctx);
     return ctx.retval;
