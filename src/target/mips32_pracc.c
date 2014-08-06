@@ -1264,7 +1264,6 @@ exit:
 
 int mips32_pracc_read_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 {
-	LOG_INFO ("mips32_pracc_read_regs");
     static int cp0_read_code[] = {
 		MIPS32_MFC0(8, 12, 0),				/* move status to $8 */
 		MIPS32_MFLO(8),						/* move lo to $8 */
@@ -1310,7 +1309,7 @@ int mips32_pracc_read_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 exit:
     pracc_queue_free(&ctx);
 
-	LOG_INFO ("exit -> mips32_pracc_read_regs");
+//	LOG_INFO ("exit -> mips32_pracc_read_regs");
 
     return ctx.retval;
 }
