@@ -612,67 +612,67 @@ typedef struct {
 	uint32_t cpuType;					// internal representation of cpu type
 	enum CPU_VENDOR vendor;				// who makes the CPU:
 	enum CPU_INSTRUCTION_SET instSet;	// MIPS16, MIPS32, microMIPS.
-	uint32_t prid;					// processor's prid
+	uint32_t prid;						// processor's prid
 	uint32_t numRegs;					//number of registers (same as calling HdiDeviceRegisterTotalGet)
-	uint32_t numInstBkpts;			// number of instruction breakpoints in this CPU
-	uint32_t numDataBkpts;			// number of data breakpoints in this CPU
+	uint32_t numInstBkpts;				// number of instruction breakpoints in this CPU
+	uint32_t numDataBkpts;				// number of data breakpoints in this CPU
 	uint32_t numTcbTrig;				// number of TCB triggers in this CPU
-	BOOLEAN pdtrace;				// CPU has trace?
-	BOOLEAN asidInstBkpts;			// asid specification supported in Inst Bkpts?
-	BOOLEAN asidDataBkpts;			// asid specification supported in Data Bkpts?
-	BOOLEAN sharedInstBkpts;		// Are inst bkpts shared between VPE's
-	BOOLEAN sharedDataBkpts;		// Are data bkpts shared between VPE's
-	BOOLEAN armedInstBkpts;			// Do inst bkpts have armed triggering
-	BOOLEAN armedDataBkpts;			// Do inst bkpts have armed triggering
-	uint32_t bkptRangePresent;        // Bitmask indicating which triggers have address ranging capability (bit 0-15 = inst, 16=31 = data)
+	bool pdtrace;						// CPU has trace?
+	bool asidInstBkpts;					// asid specification supported in Inst Bkpts?
+	bool asidDataBkpts;					// asid specification supported in Data Bkpts?
+	bool sharedInstBkpts;				// Are inst bkpts shared between VPE's
+	bool sharedDataBkpts;				// Are data bkpts shared between VPE's
+	bool armedInstBkpts;				// Do inst bkpts have armed triggering
+	bool armedDataBkpts;				// Do inst bkpts have armed triggering
+	uint32_t bkptRangePresent;			// Bitmask indicating which triggers have address ranging capability (bit 0-15 = inst, 16=31 = data)
 	uint32_t tcbrev;					// TCB revision number
 	uint32_t tcbCpuBits;				// Number of bits in the CPU field of trace words
-	uint32_t tcbVmodes;				// Vmodes field (1=lsa supported, 2=lsad supported)
-	BOOLEAN pcTraceForcedOn;		// TRUE if hardware always collects PC trace
-	BOOLEAN mtase;					// CPU has MultiThreading extension?
-	BOOLEAN dspase;					// CPU has DSP extension?
-	BOOLEAN smase;					// CPU has SmartMIPS extension?
-	BOOLEAN m16ase;					// CPU has MIPS16[e] extension?
-	BOOLEAN micromipsase;			// CPU has microMIPS extension?
-	BOOLEAN vzase;                              // CPU has Virtualization ASE?
-	BOOLEAN vzGuestId;                              // CPU has Virtualization ASE and supports Guest ID?
-	BOOLEAN profiling;				// Is profiling present?
-	BOOLEAN fpuPresent;				// CPU has floating point unit?
-	BOOLEAN pcSampSupported;		// CPU has PC Sampling capability
-	BOOLEAN DASampSupported;			// CPU has Data Address Sampling capability
-	uint32_t cpuid;					// ebase.cpuid number
-	uint32_t vpeid;					// VPE id number
-	uint32_t numtc;					// Number of TC's in this processor
+	uint32_t tcbVmodes;					// Vmodes field (1=lsa supported, 2=lsad supported)
+	bool pcTraceForcedOn;				// TRUE if hardware always collects PC trace
+	bool mtase;							// CPU has MultiThreading extension?
+	bool dspase;						// CPU has DSP extension?
+	bool smase;							// CPU has SmartMIPS extension?
+	bool m16ase;						// CPU has MIPS16[e] extension?
+	bool micromipsase;					// CPU has microMIPS extension?
+	bool vzase;                         // CPU has Virtualization ASE?
+	bool vzGuestId;                     // CPU has Virtualization ASE and supports Guest ID?
+	bool profiling;						// Is profiling present?
+	bool fpuPresent;					// CPU has floating point unit?
+	bool pcSampSupported;				// CPU has PC Sampling capability
+	bool DASampSupported;				// CPU has Data Address Sampling capability
+	uint32_t cpuid;						// ebase.cpuid number
+	uint32_t vpeid;						// VPE id number
+	uint32_t numtc;						// Number of TC's in this processor
 	uint32_t numvpe;					// Number of VPE's in this processor
 	uint32_t numitc;					// Number of ITC cells in this processor
-	BOOLEAN offchip;				// Sofware supports off-chip trace?
-	BOOLEAN onchip;					// Sofware supports on-chip trace?
-	BOOLEAN hwoffchip;				// CPU hardware supported off-chip trace?
-	BOOLEAN hwonchip;					// CPU hardware supported on-chip trace?
-	BOOLEAN iFlowtrace;				// CPU has iFlowtrace (tm)?
-	BOOLEAN cbtrig;					// CPU has complex break and trigger block?
-	BOOLEAN cbtrigPassCounters;		//CBT pass counters present?
-	BOOLEAN cbtrigTuples;			//CBT tuples present?
-	BOOLEAN cbtrigDataQualifiers;	//CBT data qualifiers present?
-	BOOLEAN cbtrigPrimedBreaks;		//CBT primed breaks present?
-	BOOLEAN cbtrigStopWatch;		//CBT stop watch present?
-	BOOLEAN cbtrigNot;				//CBT not (invert data value match) supported?
-	BOOLEAN pmtrace;				//Does system have performance monitor trace?
+	bool offchip;						// Sofware supports off-chip trace?
+	bool onchip;						// Sofware supports on-chip trace?
+	bool hwoffchip;						// CPU hardware supported off-chip trace?
+	bool hwonchip;						// CPU hardware supported on-chip trace?
+	bool iFlowtrace;					// CPU has iFlowtrace (tm)?
+	bool cbtrig;						// CPU has complex break and trigger block?
+	bool cbtrigPassCounters;			//CBT pass counters present?
+	bool cbtrigTuples;					//CBT tuples present?
+	bool cbtrigDataQualifiers;			//CBT data qualifiers present?
+	bool cbtrigPrimedBreaks;			//CBT primed breaks present?
+	bool cbtrigStopWatch;				//CBT stop watch present?
+	bool cbtrigNot;						//CBT not (invert data value match) supported?
+	bool pmtrace;						//Does system have performance monitor trace?
 	uint32_t adsize;					//Address size
-	enum EJTAG_VERSION ejtagVersion;			//EJTAG version
+	enum EJTAG_VERSION ejtagVersion;	//EJTAG version
 	uint32_t iCacheSize;
 	uint32_t dCacheSize;
-	BOOLEAN mmuType;
+	bool mmuType;
 	uint32_t tlbEntries;
-	BOOLEAN fdcPresent;
-	BOOLEAN evaPresent;	// Enhanced virtual address (introduced with proAptiv).
-	BOOLEAN systemTracePresent;
+	bool fdcPresent;
+	bool evaPresent;					// Enhanced virtual address (introduced with proAptiv).
+	bool systemTracePresent;
 	uint32_t numshadowregs;
 	uint32_t impcode;
 	uint32_t idcode;
 	uint32_t onchipSize;
-	BOOLEAN cmPresent;
-	BOOLEAN msaPresent;
+	bool cmPresent;
+	bool msaPresent;
 } CPU_INFO;
 
 extern const struct command_registration mips32_command_handlers[];
