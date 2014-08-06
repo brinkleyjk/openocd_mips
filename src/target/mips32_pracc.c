@@ -1309,8 +1309,6 @@ int mips32_pracc_read_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 exit:
     pracc_queue_free(&ctx);
 
-//	LOG_INFO ("exit -> mips32_pracc_read_regs");
-
     return ctx.retval;
 }
 
