@@ -1920,61 +1920,61 @@ COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
 						LOG_INFO ("clearing %s cache", cache_msg[1]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[1].option);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 						
 #if 0
 						/* Disable for now - need to add L2 code */
 						LOG_INFO ("clearing %s cache", cache_msg[2]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, L2);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 #endif
 
 						LOG_INFO ("clearing %s cache", cache_msg[0]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[0].option);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 						break;
 
 					case INST:
 						LOG_INFO ("clearing %s cache", cache_msg[0]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[1].option);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 						break;
 
 					case DATA:
 						LOG_INFO ("clearing %s cache", cache_msg[1]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[2].option);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 						break;
 
 					case ALLNOWB:
 						LOG_INFO ("clearing %s cache no writeback", cache_msg[1]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[3].option);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 
 #if 0
 						/* Disable for now - need to add L2 code */
 						LOG_INFO ("clearing %s cache no writeback", cache_msg[2]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, L2);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 #endif
 
 						LOG_INFO ("clearing %s cache", cache_msg[0]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[0].option);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 						break;
 
 					case DATANOWB:
 						LOG_INFO ("clearing %s cache no writeback", cache_msg[0]);
 						retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[4].option);
 						if (retval != ERROR_OK)
-							retrun (retval);
+							return (retval);
 						break;
 
 					default:
