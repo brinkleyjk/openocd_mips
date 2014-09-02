@@ -332,6 +332,8 @@ struct mips32_algorithm {
  */
 #define CFG3_M          0x80000000      /* Config4 implemented */
 #define CFG3_ISAONEXC   0x00010000      /* ISA mode on exception entry */
+#define CFG3_ISA_MODE   0x0000C000		/* ISA mode */
+#define CFG3_DSP_REV    0x00000800      /* DSP Rev */
 #define CFG3_DSPP       0x00000400      /* DSP ASE present */
 #define CFG3_LPA        0x00000080      /* Large physical addresses */
 #define CFG3_VEIC       0x00000040      /* Vectored external i/u controller */
@@ -673,6 +675,8 @@ typedef struct {
 	uint32_t onchipSize;
 	bool cmPresent;
 	bool msaPresent;
+	bool msa;							// does cpu have MSA module
+	bool mvh;							// are mfhc0 and mthc0 instructions implemented?
 } CPU_INFO;
 
 extern const struct command_registration mips32_command_handlers[];

@@ -166,6 +166,9 @@ bool is_jtag_poll_safe(void)
 	 * It is also implicitly disabled while TRST is active and
 	 * while SRST is gating the JTAG clock.
 	 */
+	if (!transport_is_jtag())
+		return jtag_poll;
+
 	if (!jtag_poll || jtag_trst != 0)
 		return false;
 	return jtag_srst == 0 || (jtag_reset_config & RESET_SRST_NO_GATING);
@@ -713,6 +716,7 @@ void jtag_add_reset(int req_tlr_or_trst, int req_srst)
 			LOG_DEBUG("SRST line asserted");
 			if (adapter_nsrst_assert_width)
 				jtag_add_sleep(adapter_nsrst_assert_width * 1000);
+			LOG_DEBUG("SRST line has been asserted");
 		} else {
 			LOG_DEBUG("SRST line released");
 			if (adapter_nsrst_delay)
