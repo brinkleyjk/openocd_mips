@@ -81,10 +81,7 @@
 #include "mips32.h"
 #include "mips32_pracc.h"
 
-#define MIPS32_PRACC_STACK 0xFF204000
 struct mips32_pracc_context {
-    /* uint32_t *local_iparam; */
-	/*    int num_iparam; */
 	uint32_t *local_oparam;
     int num_oparam;
     const uint32_t *code;
@@ -181,19 +178,6 @@ int mips32_pracc_clean_text_jump(struct mips_ejtag *ejtag_info)
 
 	if (ejtag_info->mode != 0)	/* done, queued mode won't work with lexra cores */
 		return ERROR_OK;
-#if 0
-	retval = mips32_pracc_read_ctrl_addr(ejtag_info);
-	if (retval != ERROR_OK)
-		return retval;
-
-	if (ejtag_info->pa_addr != MIPS32_PRACC_TEXT) {			/* LEXRA/BMIPS ?, shift out another NOP */
-		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_DATA);
-		mips_ejtag_drscan_32_out(ejtag_info, MIPS32_NOP);
-		retval = mips32_pracc_finish(ejtag_info);
-		if (retval != ERROR_OK)
-			return retval;
-	}
-#endif
 
 	for (int i = 0; i != 2; i++) {
 		retval = mips32_pracc_read_ctrl_addr(ejtag_info);
@@ -258,7 +242,7 @@ int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_info *ct
 		if (ejtag_info->pa_ctrl & EJTAG_CTRL_PRNW) {						/* write/store access */
 			/* Check for pending store from a previous store instruction at dmseg */
 			if (store_pending == 0) {
-				LOG_DEBUG("unexpected write at address %x", ejtag_info->pa_addr);
+				LOG_DEBUG("unexpected write at address %" PRIx32, ejtag_info->pa_addr);
 				if (code_count < 2) {	/* allow for restart */
 					restart = 1;
 					continue;
@@ -268,7 +252,7 @@ int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_info *ct
 				/* check address */
 				if (ejtag_info->pa_addr < MIPS32_PRACC_PARAM_OUT || ejtag_info->pa_addr > max_store_addr) {
 
-					LOG_DEBUG("writing at unexpected address %x", ejtag_info->pa_addr);
+					LOG_DEBUG("writing at unexpected address %" PRIx32, ejtag_info->pa_addr);
 					return ERROR_JTAG_DEVICE_ERROR;
 				}
 			}
@@ -277,7 +261,7 @@ int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_info *ct
 			mips_ejtag_set_instr(ejtag_info, EJTAG_INST_DATA);
 			retval = mips_ejtag_drscan_32(ejtag_info, &data);
 			if (retval != ERROR_OK) {
-				LOG_DEBUG ("mips_ejtag_drscan_32");
+				LOG_DEBUG ("mips_ejtag_drscan_32 failed");
 				return retval;
 			}
 
@@ -289,7 +273,7 @@ int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_info *ct
 			 if (!final_check) {			/* executing function code */
 				/* check address */
 				if (ejtag_info->pa_addr != (MIPS32_PRACC_TEXT + code_count * 4)) {
-					LOG_DEBUG("reading at unexpected address %x, expected %x (code_count = %d)",
+					LOG_DEBUG("reading at unexpected address %" PRIx32 ", expected %" PRIx32 " (code_count = %d)",
 							  ejtag_info->pa_addr, MIPS32_PRACC_TEXT + code_count * 4, code_count);
 
 					/* restart code execution only in some cases */
@@ -331,7 +315,7 @@ int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_info *ct
 					}
 				} else {
 					if (ejtag_info->pa_addr != (MIPS32_PRACC_TEXT + code_count * 4)) {
-						LOG_DEBUG("unexpected read address in final check: %x, expected: %x",
+						LOG_DEBUG("unexpected read address in final check: %" PRIx32 ", expected: %" PRIx32,
 							  ejtag_info->pa_addr, MIPS32_PRACC_TEXT + code_count * 4);
 						return ERROR_JTAG_DEVICE_ERROR;
 					}
@@ -357,12 +341,12 @@ int mips32_pracc_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_info *ct
 		/* finish processor access, let the processor eat! */
 		retval = mips32_pracc_finish(ejtag_info);
 		if (retval != ERROR_OK) {
-			LOG_DEBUG ("mips32_pracc_finish");
+			LOG_DEBUG ("mips32_pracc_finish failed");
 			return retval;
 		}
 
 		if (instr == MIPS32_DRET) {	/* after leaving debug mode nothing to do */
-			LOG_DEBUG ("MIPS32_DRET");
+			LOG_DEBUG ("MIPS32_DRET executed");
 			return ERROR_OK;
 		}
 
@@ -379,7 +363,7 @@ inline void pracc_queue_init(struct pracc_queue_info *ctx)
     ctx->code_count = 0;
     ctx->store_count = 0;
 
-    ctx->pracc_list = calloc(2 * ctx->max_code * sizeof(uint32_t), sizeof(uint8_t));
+    ctx->pracc_list = malloc(2 * ctx->max_code * sizeof(uint32_t));
     if (ctx->pracc_list == NULL) {
 		LOG_ERROR("Out of memory");
 		ctx->retval = ERROR_FAIL;
@@ -416,8 +400,8 @@ int mips32_pracc_queue_exec(struct mips_ejtag *ejtag_info, struct pracc_queue_in
 			uint8_t addr[4];
 		} scan_32;
 
-		/*	} *scan_in = malloc(sizeof(union scan_in) * (ctx->code_count + ctx->store_count)); */
-	}*scan_in = calloc(sizeof(union scan_in) * (ctx->code_count + ctx->store_count), sizeof(union scan_in));
+	} *scan_in = malloc(sizeof(union scan_in) * (ctx->code_count + ctx->store_count));
+//	}*scan_in = calloc(sizeof(union scan_in) * (ctx->code_count + ctx->store_count), sizeof(union scan_in));
 	if (scan_in == NULL) {
 		LOG_ERROR("Out of memory");
 		return ERROR_FAIL;
@@ -530,7 +514,6 @@ exit:
 
 int mips32_pracc_read_mem(struct mips_ejtag *ejtag_info, uint32_t addr, int size, int count, void *buf)
 {
-	LOG_DEBUG("mips32_pracc_read_mem");
     if (count == 1 && size == 4)
 		return mips32_pracc_read_u32(ejtag_info, addr, (uint32_t *)buf);
 
@@ -728,8 +711,6 @@ static int mips32_pracc_synchronize_cache(struct mips_ejtag *ejtag_info,
 	/** Find cache line size in bytes */
 	uint32_t clsiz;
 
-	LOG_INFO ("mips32_pracc_synchronize_cache");
-
 	if (rel) {	/* Release 2 (rel = 1) */
 		pracc_add(&ctx, 0, MIPS32_LUI(15, PRACC_UPPER_BASE_ADDR));			/* $15 = MIPS32_PRACC_BASE_ADDR */
 
@@ -823,86 +804,10 @@ exit:
 	return ctx.retval;
 }
 
-#if 0
-/**
- * \b mips32_pracc_clean_invalidate_cache
- *
- * Writeback D$ and Invalidate I$
- * so that the instructions written can be visible to CPU
- */
-static int mips32_pracc_clean_invalidate_cache(struct mips_ejtag *ejtag_info,
-					       uint32_t start_addr, uint32_t end_addr)
-{
-    static const uint32_t code[] = {
-		/* start: */
-		MIPS32_MTC0(15, 31, 0),					/* move $15 to COP0 DeSave */
-		MIPS32_LUI(15, UPPER16(MIPS32_PRACC_STACK)),		/* $15 = MIPS32_PRACC_STACK */
-		MIPS32_ORI(15, 15, LOWER16(MIPS32_PRACC_STACK)),
-		MIPS32_SW(8, 0, 15),					/* sw $8,($15) */
-		MIPS32_SW(9, 0, 15),					/* sw $9,($15) */
-		MIPS32_SW(10, 0, 15),					/* sw $10,($15) */
-		MIPS32_SW(11, 0, 15),					/* sw $11,($15) */
-
-		MIPS32_LUI(8, UPPER16(MIPS32_PRACC_PARAM_IN)),		/* $8 = MIPS32_PRACC_PARAM_IN */
-		MIPS32_ORI(8, 8, LOWER16(MIPS32_PRACC_PARAM_IN)),
-		MIPS32_LW(9, 0, 8),					    /* Load write start_addr to $9 */
-		MIPS32_LW(10, 4, 8),					/* Load write end_addr to $10 */
-		MIPS32_LW(11, 8, 8),					/* Load write clsiz to $11 */
-
-		/* cache_loop: */
-		MIPS32_SLTU(8, 10, 9),					/* sltu $8, $10, $9  :  $8 <- $10 < $9 ? */
-		MIPS32_BGTZ(8, 6),					    /* bgtz $8, end */
-		MIPS32_NOP,
-
-		MIPS32_CACHE(MIPS32_CACHE_D_HIT_WRITEBACK, 0, 9),  	/* cache Hit_Writeback_D, 0($9) */
-		MIPS32_CACHE(MIPS32_CACHE_I_HIT_INVALIDATE, 0, 9), 	/* cache Hit_Invalidate_I, 0($9) */
-
-		MIPS32_ADDU(9, 9, 11),					/* $9 += $11 */
-
-		MIPS32_B(NEG16(7)),					    /* b cache_loop */
-		MIPS32_NOP,
-
-		/* end: */
-		MIPS32_LW(11, 0, 15),					/* lw $11,($15) */
-		MIPS32_LW(10, 0, 15),					/* lw $10,($15) */
-		MIPS32_LW(9, 0, 15),					/* lw $9,($15) */
-		MIPS32_LW(8, 0, 15),					/* lw $8,($15) */
-		MIPS32_B(NEG16(25)),					/* b start */
-		MIPS32_MFC0(15, 31, 0),					/* move COP0 DeSave to $15 */
-    };
-
-    /**
-     * Find cache line size in bytes
-     */
-    uint32_t conf;
-    uint32_t dl, clsiz;
-
-    mips32_cp0_read(ejtag_info, &conf, 16, 1);
-    dl = (conf & MIPS32_CONFIG1_DL_MASK) >> MIPS32_CONFIG1_DL_SHIFT;
-
-    /* dl encoding : dl=1 => 4 bytes, dl=2 => 8 bytes, etc... */
-    clsiz = 0x2 << dl;
-
-    /* TODO remove array */
-    uint32_t *param_in = malloc(3 * sizeof(uint32_t));
-    int retval;
-    param_in[0] = start_addr;
-    param_in[1] = end_addr;
-    param_in[2] = clsiz;
-
-	retval = mips32_pracc_exec(ejtag_info, code, buf);
-
-    free(param_in);
-
-    return retval;
-}
-#endif
 static int mips32_pracc_write_mem_generic(struct mips_ejtag *ejtag_info,
 					  uint32_t addr, int size, int count, const void *buf)
 {
     struct pracc_queue_info ctx = {.max_code = 128 * 3 + 5 + 1};	/* alloc memory for the worst case */
-
-    LOG_DEBUG("mips32_pracc_write_mem_generic");
 
     pracc_queue_init(&ctx);
     if (ctx.retval != ERROR_OK)
@@ -979,8 +884,6 @@ int mips32_pracc_write_mem(struct mips_ejtag *ejtag_info, uint32_t addr, int siz
     if (retval != ERROR_OK)
 		return retval;
 
-	LOG_DEBUG ("mips32_pracc_write_mem");
-
 	/**
 	 * If we are in the cacheable region and cache is activated,
 	 * we must clean D$ (if Cache Coherency Attribute is set to 3) + invalidate I$ after we did the write,
@@ -1033,74 +936,32 @@ int mips32_pracc_write_mem(struct mips_ejtag *ejtag_info, uint32_t addr, int siz
 int mips32_pracc_invalidate_cache (struct target *target, struct mips_ejtag *ejtag_info, uint32_t addr, int size, int count, int cache)
 {
     static uint32_t inv_inst_cache[] = {
-        /* Determine how big the I$ is */
+ 		MIPS32_MTC0(15, 31, 0),					/* move $15 to COP0 DeSave */
+
+       /* Determine how big the I$ is */
         MIPS32_MFC0(t2, 16, 1),						/* C0_Config1 */
 
         /* Isolate I$ Line Size */
         MIPS32_EXT(t3, t2, CFG1_ILSHIFT, 3),        /* S_Config1IL, W_Config1IL */
-
-        /* Skip ahead if No I$ */
-        MIPS32_BEQ(t3, 0, 0x11),
-        MIPS32_NOP,
-
 		MIPS32_ADDIU (t6, zero, 2),
         MIPS32_SLLV(t3, t6, t3),		           /* Now have true I$ line size in bytes */
-
-        MIPS32_EXT(t4, t2, CFG1_ISSHIFT, 3),       /* S_Config1IS, W_Config1IS */
-		MIPS32_ADDIU (t6, zero, 64),
-        MIPS32_SLLV(t4, t6, t4),		           /* I$ Sets per way */
-
-        /* Config1IA == I$ Assoc - 1 */
-        MIPS32_EXT(t5, t2, CFG1_IASHIFT, 3),	   /* S_Config1IA, W_Config1IA */
-        MIPS32_ADDI(t5, t5, 1),
-
-        MIPS32_MUL(t4, t4, t5),			           /* Total number of sets */
         MIPS32_LUI(t6, 0x8000),	                   /* Get a KSeg0 address for cacheops */
 
         /* Clear TagLo/TagHi registers */
         MIPS32_MTC0(zero, C0_ITAGLO, 0),           /* C0_ITagLo */
         MIPS32_MTC0(zero, C0_ITAGHI, 0),		   /* C0_ITagHi */
-        MIPS32_OR(t7, t4, zero),				   /* move t7, t4 */
+	};
 
-/* next_icache_tag: */
-        /* Index Store Tag Cache Op */
-        /* Will invalidate the tag entry, clear the lock bit, and clear the LRF bit */
-        MIPS32_CACHE(Index_Store_Tag_I, 0, t6),    /* ICIndexStTag */
-
-        MIPS32_ADDI(t7,t7, NEG16(1)),              /* Decrement set counter */
-        MIPS32_BNE(t7, 0, NEG16(3)),
-        MIPS32_ADD(t6, t6, t3),                   /* Get next line address */
-
-/* done_icache: */
-		MIPS32_LUI(t7, UPPER16(MIPS32_PRACC_TEXT)),
-		MIPS32_ORI(t7, t7, LOWER16(MIPS32_PRACC_TEXT)),
-		MIPS32_JR(t7),						    /* jr start */
-		MIPS32_NOP
-    };
 
     uint32_t inv_data_cache_nowb[] = {
 
+ 		MIPS32_MTC0(15, 31, 0),					/* move $15 to COP0 DeSave */
         MIPS32_MFC0(v0, 16, 1),		/* read C0_Config1 */
 
 		/* Isolate D$ Line Size */
         MIPS32_EXT(v1, v0, CFG1_DLSHIFT, 3),		/* extract DL */
-
-		/* Skip ahead if No D$ */
-        MIPS32_BEQ(v1, zero, 19),					/* branch to "done_dcache" */
-        MIPS32_NOP,
-
 		MIPS32_ADDIU (a2, zero, 2),				    /* li a2, 2 */
 		MIPS32_SLLV(v1, a2, v1),					/* Now have true D$ line size in bytes */
-
-		MIPS32_EXT(a0, v0, CFG1_DSSHIFT, 3),		/* extract DS */
-		MIPS32_ADDIU (a2, zero, 64),				/* li a2, 64 */
-		MIPS32_SLLV(a0, a2, a0),					/* D$ Sets per way */
-
-		/* Config1DA == D$ Assoc - 1 */
-		MIPS32_EXT(a1, v0, CFG1_DASHIFT, 3),		/* extract DA */
-		MIPS32_ADDI(a1, a1, 1),
-
-		MIPS32_MUL(a0, a0, a1),						/* Get total number of sets */
 
 		MIPS32_LUI(a2, 0x8000),					    /* Get a KSeg0 address for cacheops */
 
@@ -1117,103 +978,127 @@ int mips32_pracc_invalidate_cache (struct target *target, struct mips_ejtag *ejt
 		/* Will invalidate the tag entry, clear the lock bit, and clear the LRF bit */
 
 		MIPS32_CACHE(Index_Store_Tag_D, 0, a2),		/* DCIndexStTag */
-		MIPS32_ADDI(a3, a3, NEG16(1)),			    /* Decrement set counter */
-
-		MIPS32_BNE(a3, zero, NEG16(3)),				/* brnch to: next_dcache_tag */
 		MIPS32_ADD(a2, a2, v1),				    	/* Get next line address */
+	};
 
-/* done_dcache: */
+	uint32_t done[] = {
 		MIPS32_LUI(t7, UPPER16(MIPS32_PRACC_TEXT)),
 		MIPS32_ORI(t7, t7, LOWER16(MIPS32_PRACC_TEXT)),
 		MIPS32_JR(t7),						    /* jr start */
 		MIPS32_NOP
-	};
-
-    uint32_t jmp_code[] = {
-		MIPS32_MTC0(15, 31, 0),					/* move $15 to COP0 DeSave */
-		/* 1 */ MIPS32_LUI(15, 0),				/* addr of working area added below */
-		/* 2 */ MIPS32_ORI(15, 15, 0),			/* addr of working area added below */
-		MIPS32_JR(15),							/* jump to ram program */
-		MIPS32_NOP,
     };
 
-#if 0
-	int cache_code_sz[5] = {ARRAY_SIZE(inv_inst_cache),ARRAY_SIZE(inv_data_cache_nowb), 0, 0, 0};
-	uint32_t *inv_cache[5] = {&inv_inst_cache[0],
-							  &inv_data_cache_nowb[0],
-							  NULL,
-							  NULL,
-							  NULL};
-#endif
+    struct pracc_queue_info ctx = {.max_code = 65536+20};	/* alloc memory for the worst case */
 
-    struct pracc_queue_info ctx = {.max_code = sizeof(inv_inst_cache)/4};
-	struct mips32_common *mips32 = target_to_mips32(target);
-	int retval;
+	uint32_t conf;
+	uint32_t clsiz;
+	uint32_t ways, sets, bpl;
 
     pracc_queue_init(&ctx);
     if (ctx.retval != ERROR_OK){
 		LOG_ERROR("pracc_queue_init failed");
 		goto exit;
 	}
-	if (mips32->fast_data_area == NULL) {
-		/* Get memory for block write handler
-		 * we preserve this area between calls and gain a speed increase
-		 * of about 3kb/sec when writing flash
-		 * this will be released/nulled by the system when the target is resumed or reset */
-		retval = target_alloc_working_area(target,
-										   sizeof(inv_data_cache_nowb),
-										   &mips32->fast_data_area);
-		if (retval != ERROR_OK) {
-			LOG_ERROR("No working area available");
-			return retval;
-		}
-	}
 
-	/* Get address work-area but use the uncached address */
-	uint32_t uncached_addr = (mips32->fast_data_area->address & 0x0FFFFFFF) | 0xA0000000;
-	LOG_INFO("cache: %d", cache);
+	/* Read Config1 Register to retrieve cache info */
+	mips32_cp0_read(ejtag_info, &conf, 16, 1);
+
 	switch (cache) {
 		case INST:
-			LOG_INFO ("INV INST CACHE");
-			for (int i=0; i < sizeof(inv_inst_cache); i++)
-				LOG_INFO ("0x%8.8x", inv_inst_cache[i]);
-			mips32_pracc_write_mem_generic(ejtag_info, uncached_addr, 4, ARRAY_SIZE(inv_inst_cache), inv_inst_cache);
+			/* Extract cache line size */
+			bpl  = (conf >> CFG1_ILSHIFT) & 7; // bit 21:19
+
+			/* Core configured with Instruction cache */
+			if (bpl == 0){
+				LOG_USER ("no instructure cache configured");
+				ctx.retval = ERROR_OK;
+				goto exit;
+			}
+
+			for (int i = 0; i < (int) ARRAY_SIZE(inv_inst_cache); i++) {
+				pracc_add(&ctx, 0, inv_inst_cache[i]);
+			}
+
+			/**
+			 * Find cache line size in bytes
+			 */
+
+			/* Determine Instr Cache Size */
+			ways = (conf >> CFG1_IASHIFT) & 7; // bits 18:16
+			ways++;
+
+			sets = (conf >> CFG1_ISSHIFT) & 7; // bits 24:22
+			sets = 64 << sets;
+			clsiz = sets * ways;
+
+			/* Flush Instruction Cache */
+			for (int i = 0; i < (int)clsiz; i++) {
+				pracc_add(&ctx, 0, MIPS32_CACHE(Index_Store_Tag_I, 0, t6));
+				pracc_add(&ctx, 0, MIPS32_ADD(t6, t6, t3));
+			}
+
 			break;
 
 		case DATA:
-			inv_data_cache_nowb[18] = MIPS32_CACHE(Hit_Writeback_Inv_D, 0, a2);
-			mips32_pracc_write_mem_generic(ejtag_info, uncached_addr, 4, ARRAY_SIZE(inv_data_cache_nowb), inv_data_cache_nowb);
+		case ALLNOWB:
+		case DATANOWB:
+
+			/* Extract cache line size */
+			bpl  = (conf >> CFG1_DLSHIFT) & 7; // bit 12:10
+
+			/* Core configured with Instruction cache */
+			if (bpl == 0){
+				LOG_USER ("no data cache configured");
+				ctx.retval = ERROR_OK;
+				goto exit;
+			}
+
+			for (int i = 0; i < (int) ARRAY_SIZE(inv_inst_cache); i++) {
+				pracc_add(&ctx, 0, inv_inst_cache[i]);
+			}
+
+			/**
+			 * Find cache line size in bytes
+			 */
+
+			/* Determine Instr Cache Size */
+			ways = (conf >> CFG1_DASHIFT) & 7; // bits 9:7
+			ways++;
+
+			sets = (conf >> CFG1_DSSHIFT) & 7; // bits 15:13
+			sets = 64 << sets;
+			clsiz = sets * ways;
+
+			/* Flush Instruction Cache */
+			for (int i = 0; i < (int) clsiz; i++) {
+				if (cache == DATA)
+					pracc_add(&ctx, 0, MIPS32_CACHE(Hit_Writeback_Inv_D, 0, a2));
+				else {
+					if ((cache == ALLNOWB) || (cache == DATANOWB)){
+						pracc_add(&ctx, 0, MIPS32_CACHE(Index_Store_Tag_D, 0, a2));
+					}
+				}
+					
+				pracc_add(&ctx, 0, MIPS32_ADD(t6, t6, t3));
+			}
+
 			break;
 
 		case L2:
 			break;
 
-		case ALLNOWB:
-			inv_data_cache_nowb[18] = MIPS32_CACHE(Index_Store_Tag_D, 0, a2);
-			mips32_pracc_write_mem_generic(ejtag_info, uncached_addr, 4, ARRAY_SIZE(inv_data_cache_nowb), inv_data_cache_nowb);
-			break;
-
-		case DATANOWB:
-			inv_data_cache_nowb[18] = MIPS32_CACHE(Index_Store_Tag_D, 0, a2);
-			mips32_pracc_write_mem_generic(ejtag_info, uncached_addr, 4, ARRAY_SIZE(inv_data_cache_nowb), inv_data_cache_nowb);
-			break;
 	}
 
-    jmp_code[1] |= UPPER16(uncached_addr);
-    jmp_code[2] |= LOWER16(uncached_addr);
+	/* Write exit code */
+	for (int i = 0; i < (int) ARRAY_SIZE(done); i++)
+		pracc_add(&ctx, 0, done[i]);
 
-	/* Move Jump code to probe */
-	for (unsigned int i=0; i < ARRAY_SIZE(jmp_code); i++){
-		pracc_add(&ctx, 0, jmp_code[i]);
-	}
+	/* Start code execution */
+	ctx.retval = mips32_pracc_queue_exec(ejtag_info, &ctx, NULL);
+	if (ctx.retval != ERROR_OK)
+		goto exit;
 
-	/* Execute Jump Code - real code located in target ram */
-	ctx.retval = mips32_pracc_exec(ejtag_info, &ctx, NULL);
-	
 exit:
-	if (mips32->fast_data_area != NULL)
-		target_free_working_area(target, mips32->fast_data_area);
-
     pracc_queue_free(&ctx);
     return ctx.retval;
 }
@@ -1229,7 +1114,7 @@ int mips32_pracc_write_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 		MIPS32_MTC0(1, 24, 0),					/* move $1 to depc (pc) */
     };
 
-    struct pracc_queue_info ctx = {.max_code = 37 * 2 + 6 + 1};
+    struct pracc_queue_info ctx = {.max_code = 37 * 2 + 7 + 1};
     pracc_queue_init(&ctx);
     if (ctx.retval != ERROR_OK)
 		goto exit;
@@ -1252,6 +1137,7 @@ int mips32_pracc_write_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 		pracc_add(&ctx, 0, cp0_write_code[i]);				/* write value from $1 to CPO register */
     }
 
+	pracc_add(&ctx, 0, MIPS32_MTC0(15, 31, 0));				/* load $15 in DeSave */
     pracc_add(&ctx, 0, MIPS32_LUI(1, UPPER16((regs[1]))));		/* load upper half word in $1 */
     pracc_add(&ctx, 0, MIPS32_B(NEG16(ctx.code_count + 1)));		/* jump to start */
     pracc_add(&ctx, 0, MIPS32_ORI(1, 1, LOWER16((regs[1]))));		/* load lower half word in $1 */
@@ -1278,7 +1164,7 @@ int mips32_pracc_read_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
 		MIPS32_MFC0(8, 24, 0),				/* move depc (pc) to $8 */
     };
 
-    struct pracc_queue_info ctx = {.max_code = 48};
+    struct pracc_queue_info ctx = {.max_code = 49};
     pracc_queue_init(&ctx);
     if (ctx.retval != ERROR_OK)
 		goto exit;
@@ -1300,8 +1186,9 @@ int mips32_pracc_read_regs(struct mips_ejtag *ejtag_info, uint32_t *regs)
     pracc_add(&ctx, MIPS32_PRACC_PARAM_OUT + 4,			        /* store reg1 value from $8 to param out */
 	      MIPS32_SW(8, PRACC_OUT_OFFSET + 4, 1));
 
+	pracc_add(&ctx, 0, MIPS32_MFC0(1, 31, 0));					/* move COP0 DeSave to $1, restore reg1 */
     pracc_add(&ctx, 0, MIPS32_B(NEG16(ctx.code_count + 1)));	/* jump to start */
-    pracc_add(&ctx, 0, MIPS32_MFC0(1, 31, 0));			        /* move COP0 DeSave to $1, restore reg1 */
+    pracc_add(&ctx, 0, MIPS32_MTC0(1, 31, 0));			        /* move COP0 DeSave to $1, restore reg1 */
 
 //  if (ejtag_info->mode == 0)
 	ctx.store_count++;	/* Needed by legacy code, due to offset from reg0 */
@@ -1492,8 +1379,6 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
 
     int retval, i;
     uint32_t val, ejtag_ctrl, address;
-
-	LOG_DEBUG("mips32_pracc_fastdata_xfer");
 
     if (source->size < MIPS32_FASTDATA_HANDLER_SIZE) {
 		LOG_ERROR ("source->size (%x) < MIPS32_FASTDATA_HANDLER_SIZE", source->size);
@@ -1699,15 +1584,53 @@ int mips32_pracc_fastdata_xfer(struct mips_ejtag *ejtag_info, struct working_are
     }
 
 #if 0
+
 	/* If Success fastdata load then Invalidate Instr & Data Cache */
 	if (retval == ERROR_OK)
 	{
+
+		if ((KSEGX(addr) == KSEG1) || ((addr >= 0xff200000) && (addr <= 0xff3fffff))){
+			return retval; /*Nothing to do*/
+		}
+
 		uint32_t conf = 0;
+		int cached = 0;
+
 		mips32_cp0_read(ejtag_info, &conf, 16, 0);
-		uint32_t start_addr = addr;
-		uint32_t end_addr = addr + count * 4;
-		uint32_t rel = (conf & MIPS32_CONFIG0_AR_MASK) >> MIPS32_CONFIG0_AR_SHIFT;
-		retval = mips32_pracc_synchronize_cache(ejtag_info, start_addr, end_addr, 3, rel);
+
+		switch (KSEGX(addr)) {
+			case KUSEG:
+				cached = (conf & MIPS32_CONFIG0_KU_MASK) >> MIPS32_CONFIG0_KU_SHIFT;
+				break;
+			case KSEG0:
+				cached = (conf & MIPS32_CONFIG0_K0_MASK) >> MIPS32_CONFIG0_K0_SHIFT;
+				break;
+			case KSEG2:
+			case KSEG3:
+				cached = (conf & MIPS32_CONFIG0_K23_MASK) >> MIPS32_CONFIG0_K23_SHIFT;
+				break;
+			default:
+				/* what ? */
+				break;
+		}
+
+		/**
+		 * Check cachablitiy bits coherency algorithm
+		 * is the region cacheable or uncached.
+		 * If cacheable we have to synchronize the cache
+		 */
+		if (cached == 3 || cached == 0) {		/* Write back cache or write through cache */
+			uint32_t start_addr = addr;
+			uint32_t end_addr = addr + count * 4;
+			uint32_t rel = (conf & MIPS32_CONFIG0_AR_MASK) >> MIPS32_CONFIG0_AR_SHIFT;
+
+			if (rel > 1) {
+				LOG_DEBUG("Unknown release in cache code");
+				return ERROR_FAIL;
+			}
+
+			retval = mips32_pracc_synchronize_cache(ejtag_info, start_addr, end_addr, 3, rel);
+		}
 	}
 
 	/* If Success fastdata load then Invalidate Instr & Data Cache */

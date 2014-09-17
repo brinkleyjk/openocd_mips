@@ -375,7 +375,7 @@ static int mips32_run_and_wait(struct target *target, uint32_t entry_point,
      * sequence to write register values to the processor and the read them back */
     retval = target_resume(target, 0, entry_point, 0, 1);
     if (retval != ERROR_OK)
-	return retval;
+		return retval;
 
     retval = target_wait_state(target, TARGET_HALTED, timeout_ms);
     /* If the target fails to halt due to the breakpoint, force a halt */
@@ -386,13 +386,14 @@ static int mips32_run_and_wait(struct target *target, uint32_t entry_point,
 		retval = target_wait_state(target, TARGET_HALTED, 500);
 		if (retval != ERROR_OK)
 			return retval;
+
 		return ERROR_TARGET_TIMEOUT;
     }
 
     pc = buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32);
     if (exit_point && (pc != exit_point)) {
 		LOG_DEBUG("failed algorithm halted at 0x%" PRIx32 " ", pc);
-	return ERROR_TARGET_TIMEOUT;
+		return ERROR_TARGET_TIMEOUT;
     }
 
     return ERROR_OK;
@@ -436,7 +437,7 @@ int mips32_run_algorithm(struct target *target, int num_mem_params,
 
 	for (i = 0; i < num_mem_params; i++) {
 		retval = target_write_buffer(target, mem_params[i].address,
-																 mem_params[i].size, mem_params[i].value);
+									 mem_params[i].size, mem_params[i].value);
 		if (retval != ERROR_OK)
 			return retval;
 	}
@@ -445,15 +446,15 @@ int mips32_run_algorithm(struct target *target, int num_mem_params,
 		struct reg *reg = register_get_by_name(mips32->core_cache, reg_params[i].reg_name, 0);
 
 		if (!reg) {
-	    LOG_ERROR("BUG: register '%s' not found", reg_params[i].reg_name);
-	    return ERROR_COMMAND_SYNTAX_ERROR;
+			LOG_ERROR("BUG: register '%s' not found", reg_params[i].reg_name);
+			return ERROR_COMMAND_SYNTAX_ERROR;
 		}
 
 		if (reg->size != reg_params[i].size) {
-	    LOG_ERROR("BUG: register '%s' size doesn't match reg_params[i].size",
-								reg_params[i].reg_name);
+			LOG_ERROR("BUG: register '%s' size doesn't match reg_params[i].size",
+					  reg_params[i].reg_name);
 
-	    return ERROR_COMMAND_SYNTAX_ERROR;
+			return ERROR_COMMAND_SYNTAX_ERROR;
 		}
 
 		mips32_set_core_reg(reg, reg_params[i].value);
@@ -462,7 +463,6 @@ int mips32_run_algorithm(struct target *target, int num_mem_params,
 	mips32->isa_mode = mips32_algorithm_info->isa_mode;
 
 	retval = mips32_run_and_wait(target, entry_point, timeout_ms, exit_point, mips32);
-
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -627,8 +627,10 @@ int mips32_configure_break_unit(struct target *target)
 
     /* check if target endianness settings matches debug control register */
     if (((ejtag_info->debug_caps & EJTAG_DCR_ENM) && (target->endianness == TARGET_LITTLE_ENDIAN)) ||
-		(!(ejtag_info->debug_caps & EJTAG_DCR_ENM) && (target->endianness == TARGET_BIG_ENDIAN)))
+		(!(ejtag_info->debug_caps & EJTAG_DCR_ENM) && (target->endianness == TARGET_BIG_ENDIAN))){
 		LOG_WARNING("DCR endianness settings does not match target settings");
+		LOG_WARNING("Config file does not match DCR endianness");
+	}
 
     LOG_DEBUG("DCR 0x%" PRIx32 " numinst %i numdata %i", dcr, mips32->num_inst_bpoints,
 			  mips32->num_data_bpoints);
@@ -732,7 +734,7 @@ int mips32_checksum_memory(struct target *target, uint32_t address,
     init_reg_param(&reg_params[1], "a1", 32, PARAM_OUT);
     buf_set_u32(reg_params[1].value, 0, 32, count);
 
-    int timeout = 20000 * (1 + (count / (1024 * 1024)));
+    int timeout = (20000 * (1 + (count / (1024 * 1024))) * 2);
 
     int retval = target_run_algorithm(target, 0, NULL, 2, reg_params,
 				  crc_algorithm->address, crc_algorithm->address + (sizeof(mips_crc_code)-4), timeout,
@@ -804,17 +806,6 @@ int mips32_blank_check_memory(struct target *target,
     target_free_working_area(target, erase_check_algorithm);
 
     return retval;
-}
-int mips32_mark_reg_invalid (struct target *target, int reg_num)
-{
-    struct mips32_common *mips32 = target_to_mips32(target);
-
-	if (mips32->core_cache->reg_list[reg_num].dirty != 0)
-		LOG_DEBUG("Register %s marked dirty being abandoned", mips32_regs[reg_num].name);
-
-	mips32->core_cache->reg_list[reg_num].valid = 0;
-
-    return ERROR_OK;
 }
 
 static int mips32_verify_pointer(struct command_context *cmd_ctx,
@@ -1244,8 +1235,7 @@ COMMAND_HANDLER(mips32_handle_dsp_command)
 				return ERROR_COMMAND_SYNTAX_ERROR;
 			}
 		} else if (CMD_ARGC == 3) {
-
-			LOG_INFO ("???");
+			return ERROR_COMMAND_SYNTAX_ERROR;
 		}
     }
 
@@ -1758,15 +1748,15 @@ COMMAND_HANDLER(mips32_handle_cpuinfo_command)
 	}
 
 	/* Determine Instr Cache Size */
-	ways = wayTable[(config1 >> 16) & 7];
-	sets = setTableISDS[(config1 >> 22) & 7];
-	bpl  = bplTable[(config1 >> 19) & 7];
+	ways = wayTable[(config1 >> CFG1_IASHIFT) & 7];
+	sets = setTableISDS[(config1 >> CFG1_ISSHIFT) & 7];
+	bpl  = bplTable[(config1 >> CFG1_ILSHIFT) & 7];
 	info.iCacheSize = ways*sets*bpl;
 
 	/* Determine data cache size */
-	ways = wayTable[(config1 >>  7) & 7];
-	sets = setTableISDS[(config1 >> 13) & 7];
-	bpl  = bplTable[(config1 >> 10) & 7];
+	ways = wayTable[(config1 >>  CFG1_DASHIFT) & 7];
+	sets = setTableISDS[(config1 >> CFG1_DSSHIFT) & 7];
+	bpl  = bplTable[(config1 >> CFG1_DLSHIFT) & 7];
 	info.dCacheSize = ways*sets*bpl;
 
 	/* Display Core Type info */
@@ -1983,7 +1973,6 @@ COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
 				}
 
 				if (retval == ERROR_FAIL){
-					LOG_INFO ("xxx");
 					return ERROR_FAIL;
 				}
 				else
@@ -1992,24 +1981,24 @@ COMMAND_HANDLER(mips32_handle_invalidate_cache_command)
 		}
 	} else {
 		/* default is All */
-		i = 0;
+		LOG_INFO ("clearing %s cache", cache_msg[1]);
+		retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[1].option);
+		if (retval != ERROR_OK)
+			return (retval);
+						
+#if 0
+		/* Disable for now - need to add L2 code */
+		LOG_INFO ("clearing %s cache", cache_msg[2]);
+		retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, L2);
+		if (retval != ERROR_OK)
+			return (retval);
+#endif
+
+		LOG_INFO ("clearing %s cache", cache_msg[0]);
+		retval = mips32_pracc_invalidate_cache(target, ejtag_info, 0, 0, 0, invalidate_cmd[0].option);
+		if (retval != ERROR_OK)
+			return (retval);
 	}
-
-	return ERROR_OK;
-}
-
-COMMAND_HANDLER(mips32_handle_mark_reg_invalid)
-{
-	struct target *target = get_current_target(CMD_CTX);
-    struct mips32_common *mips32 = target_to_mips32(target);
-	uint32_t temp;
-	
-	if (CMD_ARGC == 1)
-		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], temp);
-	else if (CMD_ARGC > 1)
-			return ERROR_COMMAND_SYNTAX_ERROR;
-
-    mips32->core_cache->reg_list[temp].valid = 0;
 
 	return ERROR_OK;
 }
@@ -2035,6 +2024,83 @@ COMMAND_HANDLER(mips32_handle_scan_delay_command)
     }
 
     return ERROR_OK;
+}
+
+extern int mips_ejtag_get_impcode(struct mips_ejtag *ejtag_info, uint32_t *impcode);
+COMMAND_HANDLER(mips32_handle_ejtag_reg_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	struct mips32_common *mips32 = target_to_mips32(target);
+	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+
+	uint32_t idcode;
+	uint32_t impcode;
+    uint32_t ejtag_ctrl;
+    int retval;
+
+	retval = mips_ejtag_get_idcode(ejtag_info, &idcode);
+	retval = mips_ejtag_get_impcode (ejtag_info, &impcode);
+    mips_ejtag_set_instr(ejtag_info, EJTAG_INST_CONTROL);
+	ejtag_ctrl = ejtag_info->ejtag_ctrl;
+	retval = mips_ejtag_drscan_32(ejtag_info, &ejtag_ctrl);
+
+	LOG_USER ("       idcode: 0x%8.8x", idcode);
+	LOG_USER ("      impcode: 0x%8.8x", impcode);
+	LOG_USER ("ejtag control: 0x%8.8x", ejtag_ctrl);
+
+#if 0
+	if (CMD_ARGC == 1)
+		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], ejtag_info->scan_delay);
+	else if (CMD_ARGC > 1)
+			return ERROR_COMMAND_SYNTAX_ERROR;
+
+	command_print(CMD_CTX, "scan delay: %d nsec", ejtag_info->scan_delay);
+	if (ejtag_info->scan_delay >= MIPS32_SCAN_DELAY_LEGACY_MODE) {
+		ejtag_info->mode = 0;
+		command_print(CMD_CTX, "running in legacy mode");
+	} else {
+		ejtag_info->mode = 1;
+		command_print(CMD_CTX, "running in fast queued mode");
+	}
+#endif
+	return ERROR_OK;
+}
+
+COMMAND_HANDLER(mips32_handle_pic32_reset_command)
+{
+	struct target *target = get_current_target(CMD_CTX);
+	struct mips32_common *mips32 = target_to_mips32(target);
+	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
+
+    uint32_t ejtag_ctrl;
+    int retval;
+
+	LOG_INFO("Using MTAP reset to reset processor...");
+
+	/* use microchip specific MTAP reset */
+	mips_ejtag_set_instr(ejtag_info, MTAP_SW_MTAP);
+	mips_ejtag_set_instr(ejtag_info, MTAP_COMMAND);
+
+	mips_ejtag_drscan_8_out(ejtag_info, MCHP_ASERT_RST);
+	mips_ejtag_drscan_8_out(ejtag_info, MCHP_DE_ASSERT_RST);
+	mips_ejtag_set_instr(ejtag_info, MTAP_SW_ETAP);
+
+#if 0
+	if (CMD_ARGC == 1)
+		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], ejtag_info->scan_delay);
+	else if (CMD_ARGC > 1)
+			return ERROR_COMMAND_SYNTAX_ERROR;
+
+	command_print(CMD_CTX, "scan delay: %d nsec", ejtag_info->scan_delay);
+	if (ejtag_info->scan_delay >= MIPS32_SCAN_DELAY_LEGACY_MODE) {
+		ejtag_info->mode = 0;
+		command_print(CMD_CTX, "running in legacy mode");
+	} else {
+		ejtag_info->mode = 1;
+		command_print(CMD_CTX, "running in fast queued mode");
+	}
+#endif
+	return ERROR_OK;
 }
 
 static const struct command_registration mips32_exec_command_handlers[] = {
@@ -2067,19 +2133,26 @@ static const struct command_registration mips32_exec_command_handlers[] = {
 		.usage = "[value]",
     },
     {
-		.name = "mark_reg_invalid",
-		.handler = mips32_handle_mark_reg_invalid,
-		.mode = COMMAND_ANY,
-		.help = "mark cached register invalid",
-		.usage = "[value]",
-    },
-    {
 		.name = "dsp",
 		.handler = mips32_handle_dsp_command,
 		.mode = COMMAND_ANY,
 		.help = "display/set DSP registers",
 		.usage = "[value]",
     },
+	{
+		.name = "ejtag_reg",
+		.handler = mips32_handle_ejtag_reg_command,
+		.mode = COMMAND_ANY,
+		.help = "read ejtag registers",
+		.usage = "[value]",
+	},
+	{
+		.name = "pic32_reset",
+		.handler = mips32_handle_pic32_reset_command,
+		.mode = COMMAND_ANY,
+		.help = "force pic32 reset",
+		.usage = "[value]",
+	},
     COMMAND_REGISTRATION_DONE
 };
 

@@ -31,25 +31,25 @@
 
 #include "breakpoints.h"
 #include "mips32.h"
-#include "mips_m4k.h"
+#include "mips_m14k.h"
 #include "mips32_dmaacc.h"
 #include "target_type.h"
 #include "register.h"
 
-static void mips_m4k_enable_breakpoints(struct target *target);
-static void mips_m4k_enable_watchpoints(struct target *target);
-static int mips_m4k_set_breakpoint(struct target *target,
+static void mips_m14k_enable_breakpoints(struct target *target);
+static void mips_m14k_enable_watchpoints(struct target *target);
+static int mips_m14k_set_breakpoint(struct target *target,
 		struct breakpoint *breakpoint);
-static int mips_m4k_unset_breakpoint(struct target *target,
+static int mips_m14k_unset_breakpoint(struct target *target,
 		struct breakpoint *breakpoint);
-static int mips_m4k_internal_restore(struct target *target, int current,
+static int mips_m14k_internal_restore(struct target *target, int current,
 		uint32_t address, int handle_breakpoints,
 		int debug_execution);
-static int mips_m4k_halt(struct target *target);
-static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
+static int mips_m14k_halt(struct target *target);
+static int mips_m14k_bulk_write_memory(struct target *target, uint32_t address,
 		uint32_t count, const uint8_t *buffer);
 
-static int mips_m4k_examine_debug_reason(struct target *target)
+static int mips_m14k_examine_debug_reason(struct target *target)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
@@ -102,7 +102,7 @@ static int mips_m4k_examine_debug_reason(struct target *target)
 	return ERROR_OK;
 }
 
-static int mips_m4k_debug_entry(struct target *target, int echo)
+static int mips_m14k_debug_entry(struct target *target, int echo)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
@@ -128,7 +128,7 @@ static int mips_m4k_debug_entry(struct target *target, int echo)
 	}
 
 	/* attempt to find halt reason */
-	retval = mips_m4k_examine_debug_reason(target);
+	retval = mips_m14k_examine_debug_reason(target);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -144,7 +144,7 @@ static int mips_m4k_debug_entry(struct target *target, int echo)
 	return ERROR_OK;
 }
 
-static struct target *get_mips_m4k(struct target *target, int32_t coreid)
+static struct target *get_mips_m14k(struct target *target, int32_t coreid)
 {
 	struct target_list *head;
 	struct target *curr;
@@ -159,7 +159,7 @@ static struct target *get_mips_m4k(struct target *target, int32_t coreid)
 	return target;
 }
 
-static int mips_m4k_halt_smp(struct target *target)
+static int mips_m14k_halt_smp(struct target *target)
 {
 	int retval = ERROR_OK;
 	struct target_list *head;
@@ -169,7 +169,7 @@ static int mips_m4k_halt_smp(struct target *target)
 		int ret = ERROR_OK;
 		curr = head->target;
 		if ((curr != target) && (curr->state != TARGET_HALTED))
-			ret = mips_m4k_halt(curr);
+			ret = mips_m14k_halt(curr);
 
 		if (ret != ERROR_OK) {
 			LOG_ERROR("halt failed target->coreid: %" PRId32, curr->coreid);
@@ -186,12 +186,12 @@ static int update_halt_gdb(struct target *target)
 	if (target->gdb_service->core[0] == -1) {
 		target->gdb_service->target = target;
 		target->gdb_service->core[0] = target->coreid;
-		retval = mips_m4k_halt_smp(target);
+		retval = mips_m14k_halt_smp(target);
 	}
 	return retval;
 }
 
-static int mips_m4k_poll(struct target *target)
+static int mips_m14k_poll(struct target *target)
 {
 	int retval = ERROR_OK;
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -206,8 +206,9 @@ static int mips_m4k_poll(struct target *target)
 	if ((target->state == TARGET_HALTED) && (target->smp) &&
 		(target->gdb_service) &&
 		(target->gdb_service->target == NULL)) {
+		LOG_INFO ("test");
 		target->gdb_service->target =
-			get_mips_m4k(target, target->gdb_service->core[1]);
+			get_mips_m14k(target, target->gdb_service->core[1]);
 		target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 		return retval;
 	}
@@ -215,6 +216,7 @@ static int mips_m4k_poll(struct target *target)
 	/* read ejtag control reg */
 	mips_ejtag_set_instr(ejtag_info, EJTAG_INST_CONTROL);
 	retval = mips_ejtag_drscan_32(ejtag_info, &ejtag_ctrl);
+	LOG_DEBUG ("1-ejtag_ctrl = 0x%8.8x", ejtag_ctrl);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG ("mips_ejtag_drscan_32 failed: ejtag_ctrl = 0x%8.8x", ejtag_ctrl);
 		return retval;
@@ -229,12 +231,14 @@ static int mips_m4k_poll(struct target *target)
 
 		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_CONTROL);
 		retval = mips_ejtag_drscan_32(ejtag_info, &ejtag_ctrl);
+		LOG_DEBUG ("2-ejtag_ctrl = 0x%8.8x", ejtag_ctrl);
 		if (retval != ERROR_OK) {
 			LOG_DEBUG ("mips_ejtag_drscan_32 failed: ejtag_ctrl");
 			return retval;
 		}
 
-		LOG_USER("Reset Detected");
+//		LOG_USER("Reset Detected");
+		LOG_DEBUG("Reset Detected");
 
 		/* Marked register cache invalid if reset detected */
 		register_cache_invalidate(mips32->core_cache);
@@ -261,14 +265,14 @@ static int mips_m4k_poll(struct target *target)
 			 */
 			mips_ejtag_set_instr(ejtag_info, EJTAG_INST_NORMALBOOT);
 			target->state = TARGET_HALTED;
-			retval = mips_m4k_debug_entry(target, 1);
+			retval = mips_m14k_debug_entry(target, 1);
 			if (retval != ERROR_OK) {
-				LOG_DEBUG ("mips_m4k_debug_entry failed");
+				LOG_DEBUG ("mips_m14k_debug_entry failed");
 				return retval;
 			}
 
 			if (target->smp && ((prev_target_state == TARGET_RUNNING)
-								|| (prev_target_state == TARGET_RESET))) {
+													|| (prev_target_state == TARGET_RESET))) {
 				retval = update_halt_gdb(target);
 				if (retval != ERROR_OK) {
 					LOG_DEBUG ("update_halt_gdb failed");
@@ -280,9 +284,9 @@ static int mips_m4k_poll(struct target *target)
 		} else if (target->state == TARGET_DEBUG_RUNNING) {
 			target->state = TARGET_HALTED;
 
-			retval = mips_m4k_debug_entry(target, 1);
+			retval = mips_m14k_debug_entry(target, 1);
 			if (retval != ERROR_OK) {
-				LOG_DEBUG ("mips_m4k_debug_entry failed");
+				LOG_DEBUG ("mips_m14k_debug_entry failed");
 				return retval;
 			}
 
@@ -297,13 +301,14 @@ static int mips_m4k_poll(struct target *target)
 			target_call_event_callbacks(target, TARGET_EVENT_DEBUG_HALTED);
 		}
 	} else {
+			LOG_DEBUG ("ejtag_ctrl = 0x%8.8x", ejtag_ctrl);
 			target->state = TARGET_RUNNING;
 		}
 
 	return ERROR_OK;
 }
 
-static int mips_m4k_halt(struct target *target)
+static int mips_m14k_halt(struct target *target)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
@@ -324,7 +329,7 @@ static int mips_m4k_halt(struct target *target)
 			return ERROR_TARGET_FAILURE;
 		} else {
 			/* we came here in a reset_halt or reset_init sequence
-			 * debug entry was already prepared in mips_m4k_assert_reset()
+			 * debug entry was already prepared in mips_m14k_assert_reset()
 			 */
 			target->debug_reason = DBG_REASON_DBGRQ;
 
@@ -340,13 +345,12 @@ static int mips_m4k_halt(struct target *target)
 	return ERROR_OK;
 }
 
-static int mips_m4k_assert_reset(struct target *target)
+static int mips_m14k_assert_reset(struct target *target)
 {
-	struct mips_m4k_common *mips_m4k = target_to_m4k(target);
-	struct mips_ejtag *ejtag_info = &mips_m4k->mips32.ejtag_info;
+	struct mips_m14k_common *mips_m14k = target_to_m14k(target);
+	struct mips_ejtag *ejtag_info = &mips_m14k->mips32.ejtag_info;
 
-	LOG_DEBUG("target->state: %s",
-		target_state_name(target));
+	LOG_DEBUG("target->state: %s", target_state_name(target));
 
 	enum reset_types jtag_reset_config = jtag_get_reset_config();
 
@@ -367,7 +371,7 @@ static int mips_m4k_assert_reset(struct target *target)
 			/* use hardware to catch reset */
 			mips_ejtag_set_instr(ejtag_info, EJTAG_INST_EJTAGBOOT);
 		} else
-		mips_ejtag_set_instr(ejtag_info, EJTAG_INST_NORMALBOOT);
+			mips_ejtag_set_instr(ejtag_info, EJTAG_INST_NORMALBOOT);
 	}
 
 	if (jtag_reset_config & RESET_HAS_SRST) {
@@ -377,7 +381,7 @@ static int mips_m4k_assert_reset(struct target *target)
 		else if (!srst_asserted)
 			jtag_add_reset(0, 1);
 	} else {
-		if (mips_m4k->is_pic32mx) {
+		if (mips_m14k->is_pic32mx) {
 			LOG_DEBUG("Using MTAP reset to reset processor...");
 
 			/* use microchip specific MTAP reset */
@@ -399,7 +403,7 @@ static int mips_m4k_assert_reset(struct target *target)
 	target->state = TARGET_RESET;
 	jtag_add_sleep(50000);
 
-	register_cache_invalidate(mips_m4k->mips32.core_cache);
+	register_cache_invalidate(mips_m14k->mips32.core_cache);
 
 	if (target->reset_halt) {
 
@@ -411,7 +415,7 @@ static int mips_m4k_assert_reset(struct target *target)
 	return ERROR_OK;
 }
 
-static int mips_m4k_deassert_reset(struct target *target)
+static int mips_m14k_deassert_reset(struct target *target)
 {
 	LOG_DEBUG("target->state: %s", target_state_name(target));
 
@@ -421,7 +425,7 @@ static int mips_m4k_deassert_reset(struct target *target)
 	return ERROR_OK;
 }
 
-static int mips_m4k_single_step_core(struct target *target)
+static int mips_m14k_single_step_core(struct target *target)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 	struct mips_ejtag *ejtag_info = &mips32->ejtag_info;
@@ -441,14 +445,14 @@ static int mips_m4k_single_step_core(struct target *target)
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = mips_m4k_debug_entry(target, 0);
+	retval = mips_m14k_debug_entry(target, 0);
 	if (retval != ERROR_OK)
 		return retval;
 
 	return ERROR_OK;
 }
 
-static int mips_m4k_restore_smp(struct target *target, uint32_t address, int handle_breakpoints)
+static int mips_m14k_restore_smp(struct target *target, uint32_t address, int handle_breakpoints)
 {
 	int retval = ERROR_OK;
 	struct target_list *head;
@@ -460,7 +464,7 @@ static int mips_m4k_restore_smp(struct target *target, uint32_t address, int han
 		curr = head->target;
 		if ((curr != target) && (curr->state != TARGET_RUNNING)) {
 			/*  resume current address , not in step mode */
-			ret = mips_m4k_internal_restore(curr, 1, address,
+			ret = mips_m14k_internal_restore(curr, 1, address,
 						   handle_breakpoints, 0);
 
 			if (ret != ERROR_OK) {
@@ -474,7 +478,7 @@ static int mips_m4k_restore_smp(struct target *target, uint32_t address, int han
 	return retval;
 }
 
-static int mips_m4k_internal_restore(struct target *target, int current,
+static int mips_m14k_internal_restore(struct target *target, int current,
 		uint32_t address, int handle_breakpoints, int debug_execution)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -489,13 +493,12 @@ static int mips_m4k_internal_restore(struct target *target, int current,
 
 	if (!debug_execution) {
 		target_free_all_working_areas(target);
-		mips_m4k_enable_breakpoints(target);
-		mips_m4k_enable_watchpoints(target);
+		mips_m14k_enable_breakpoints(target);
+		mips_m14k_enable_watchpoints(target);
 	}
 
 	/* current = 1: continue on current pc, otherwise continue at <address> */
 	if (!current) {
-		LOG_DEBUG("Resume at address: 0x%8.8" PRIx32 "", address);
 		buf_set_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32, address);
 		mips32->core_cache->reg_list[MIPS32_PC].dirty = 1;
 		mips32->core_cache->reg_list[MIPS32_PC].valid = 1;
@@ -517,9 +520,9 @@ static int mips_m4k_internal_restore(struct target *target, int current,
 		breakpoint = breakpoint_find(target, resume_pc);
 		if (breakpoint) {
 			LOG_DEBUG("unset breakpoint at 0x%8.8" PRIx32 "", breakpoint->address);
-			mips_m4k_unset_breakpoint(target, breakpoint);
-			mips_m4k_single_step_core(target);
-			mips_m4k_set_breakpoint(target, breakpoint);
+			mips_m14k_unset_breakpoint(target, breakpoint);
+			mips_m14k_single_step_core(target);
+			mips_m14k_set_breakpoint(target, breakpoint);
 		}
 	}
 
@@ -546,7 +549,7 @@ static int mips_m4k_internal_restore(struct target *target, int current,
 	return ERROR_OK;
 }
 
-static int mips_m4k_resume(struct target *target, int current,
+static int mips_m14k_resume(struct target *target, int current,
 		uint32_t address, int handle_breakpoints, int debug_execution)
 {
 	int retval = ERROR_OK;
@@ -561,19 +564,19 @@ static int mips_m4k_resume(struct target *target, int current,
 		return retval;
 	}
 
-	retval = mips_m4k_internal_restore(target, current, address,
+	retval = mips_m14k_internal_restore(target, current, address,
 				handle_breakpoints,
 				debug_execution);
 
 	if (retval == ERROR_OK && target->smp) {
 		target->gdb_service->core[0] = -1;
-		retval = mips_m4k_restore_smp(target, address, handle_breakpoints);
+		retval = mips_m14k_restore_smp(target, address, handle_breakpoints);
 	}
 
 	return retval;
 }
 
-static int mips_m4k_step(struct target *target, int current,
+static int mips_m14k_step(struct target *target, int current,
 		uint32_t address, int handle_breakpoints)
 {
 	/* get pointers to arch-specific information */
@@ -598,7 +601,7 @@ static int mips_m4k_step(struct target *target, int current,
 		breakpoint = breakpoint_find(target,
 				buf_get_u32(mips32->core_cache->reg_list[MIPS32_PC].value, 0, 32));
 		if (breakpoint)
-			mips_m4k_unset_breakpoint(target, breakpoint);
+			mips_m14k_unset_breakpoint(target, breakpoint);
 	}
 
 	/* restore context */
@@ -621,31 +624,31 @@ static int mips_m4k_step(struct target *target, int current,
 	register_cache_invalidate(mips32->core_cache);
 
 	LOG_DEBUG("target stepped ");
-	int retval = mips_m4k_debug_entry(target, 1);
+	int retval = mips_m14k_debug_entry(target, 1);
 	if (retval != ERROR_OK)
 		return retval;
 
 	if (breakpoint)
-		mips_m4k_set_breakpoint(target, breakpoint);
+		mips_m14k_set_breakpoint(target, breakpoint);
 
 	target_call_event_callbacks(target, TARGET_EVENT_HALTED);
 
 	return ERROR_OK;
 }
 
-static void mips_m4k_enable_breakpoints(struct target *target)
+static void mips_m14k_enable_breakpoints(struct target *target)
 {
 	struct breakpoint *breakpoint = target->breakpoints;
 
 	/* set any pending breakpoints */
 	while (breakpoint) {
 		if (breakpoint->set == 0)
-			mips_m4k_set_breakpoint(target, breakpoint);
+			mips_m14k_set_breakpoint(target, breakpoint);
 		breakpoint = breakpoint->next;
 	}
 }
 
-static int mips_m4k_set_breakpoint(struct target *target,
+static int mips_m14k_set_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -810,7 +813,7 @@ static int mips_m4k_set_breakpoint(struct target *target,
 	return ERROR_OK;
 }
 
-static int mips_m4k_unset_breakpoint(struct target *target,
+static int mips_m14k_unset_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
 	/* get pointers to arch-specific information */
@@ -832,7 +835,7 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 			return ERROR_OK;
 		}
 
-		LOG_DEBUG("bpid: %" PRIu32 " - releasing hw: %d",
+		LOG_INFO("bpid: %" PRIu32 " - releasing hw: %d",
 				breakpoint->unique_id,
 				bp_num);
 
@@ -901,7 +904,7 @@ static int mips_m4k_unset_breakpoint(struct target *target,
 	return ERROR_OK;
 }
 
-static int mips_m4k_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
+static int mips_m14k_add_breakpoint(struct target *target, struct breakpoint *breakpoint)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 
@@ -914,10 +917,10 @@ static int mips_m4k_add_breakpoint(struct target *target, struct breakpoint *bre
 		mips32->num_inst_bpoints_avail--;
 	}
 
-	return mips_m4k_set_breakpoint(target, breakpoint);
+	return mips_m14k_set_breakpoint(target, breakpoint);
 }
 
-static int mips_m4k_remove_breakpoint(struct target *target,
+static int mips_m14k_remove_breakpoint(struct target *target,
 		struct breakpoint *breakpoint)
 {
 	/* get pointers to arch-specific information */
@@ -929,7 +932,7 @@ static int mips_m4k_remove_breakpoint(struct target *target,
 	}
 
 	if (breakpoint->set)
-		mips_m4k_unset_breakpoint(target, breakpoint);
+		mips_m14k_unset_breakpoint(target, breakpoint);
 
 	if (breakpoint->type == BKPT_HARD)
 		mips32->num_inst_bpoints_avail++;
@@ -937,7 +940,7 @@ static int mips_m4k_remove_breakpoint(struct target *target,
 	return ERROR_OK;
 }
 
-static int mips_m4k_set_watchpoint(struct target *target,
+static int mips_m14k_set_watchpoint(struct target *target,
 		struct watchpoint *watchpoint)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -1015,7 +1018,7 @@ static int mips_m4k_set_watchpoint(struct target *target,
 	return ERROR_OK;
 }
 
-static int mips_m4k_unset_watchpoint(struct target *target,
+static int mips_m14k_unset_watchpoint(struct target *target,
 		struct watchpoint *watchpoint)
 {
 	/* get pointers to arch-specific information */
@@ -1042,7 +1045,7 @@ static int mips_m4k_unset_watchpoint(struct target *target,
 	return ERROR_OK;
 }
 
-static int mips_m4k_add_watchpoint(struct target *target, struct watchpoint *watchpoint)
+static int mips_m14k_add_watchpoint(struct target *target, struct watchpoint *watchpoint)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
 
@@ -1053,11 +1056,11 @@ static int mips_m4k_add_watchpoint(struct target *target, struct watchpoint *wat
 
 	mips32->num_data_bpoints_avail--;
 
-	mips_m4k_set_watchpoint(target, watchpoint);
+	mips_m14k_set_watchpoint(target, watchpoint);
 	return ERROR_OK;
 }
 
-static int mips_m4k_remove_watchpoint(struct target *target,
+static int mips_m14k_remove_watchpoint(struct target *target,
 		struct watchpoint *watchpoint)
 {
 	/* get pointers to arch-specific information */
@@ -1069,26 +1072,26 @@ static int mips_m4k_remove_watchpoint(struct target *target,
 	}
 
 	if (watchpoint->set)
-		mips_m4k_unset_watchpoint(target, watchpoint);
+		mips_m14k_unset_watchpoint(target, watchpoint);
 
 	mips32->num_data_bpoints_avail++;
 
 	return ERROR_OK;
 }
 
-static void mips_m4k_enable_watchpoints(struct target *target)
+static void mips_m14k_enable_watchpoints(struct target *target)
 {
 	struct watchpoint *watchpoint = target->watchpoints;
 
 	/* set any pending watchpoints */
 	while (watchpoint) {
 		if (watchpoint->set == 0)
-			mips_m4k_set_watchpoint(target, watchpoint);
+			mips_m14k_set_watchpoint(target, watchpoint);
 		watchpoint = watchpoint->next;
 	}
 }
 
-static int mips_m4k_read_memory(struct target *target, uint32_t address,
+static int mips_m14k_read_memory(struct target *target, uint32_t address,
 								uint32_t size, uint32_t count, uint8_t *buffer)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -1148,7 +1151,7 @@ static int mips_m4k_read_memory(struct target *target, uint32_t address,
 	return retval;
 }
 
-static int mips_m4k_write_memory(struct target *target, uint32_t address,
+static int mips_m14k_write_memory(struct target *target, uint32_t address,
 		uint32_t size, uint32_t count, const uint8_t *buffer)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -1163,9 +1166,10 @@ static int mips_m4k_write_memory(struct target *target, uint32_t address,
 	}
 
 	if (size == 4 && count > 32) {
-		int retval = mips_m4k_bulk_write_memory(target, address, count, buffer);
-		if (retval == ERROR_OK)
+		int retval = mips_m14k_bulk_write_memory(target, address, count, buffer);
+		if (retval == ERROR_OK) {
 			return ERROR_OK;
+		}
 		else
 			if ((retval == ERROR_TARGET_FAST_DOWNLOAD_FAILED) && 
 				(ejtag_info->scan_delay < MIPS32_SCAN_DELAY_LEGACY_MODE)) {
@@ -1220,7 +1224,7 @@ static int mips_m4k_write_memory(struct target *target, uint32_t address,
 	return ERROR_OK;
 }
 
-static int mips_m4k_init_target(struct command_context *cmd_ctx,
+static int mips_m14k_init_target(struct command_context *cmd_ctx,
 		struct target *target)
 {
 	mips32_build_reg_cache(target);
@@ -1228,34 +1232,34 @@ static int mips_m4k_init_target(struct command_context *cmd_ctx,
 	return ERROR_OK;
 }
 
-static int mips_m4k_init_arch_info(struct target *target,
-		struct mips_m4k_common *mips_m4k, struct jtag_tap *tap)
+static int mips_m14k_init_arch_info(struct target *target,
+		struct mips_m14k_common *mips_m14k, struct jtag_tap *tap)
 {
-	struct mips32_common *mips32 = &mips_m4k->mips32;
+	struct mips32_common *mips32 = &mips_m14k->mips32;
 
-	mips_m4k->common_magic = MIPSM4K_COMMON_MAGIC;
+	mips_m14k->common_magic = MIPSM14K_COMMON_MAGIC;
 
 	/* initialize mips4k specific info */
 	mips32_init_arch_info(target, mips32, tap);
-	mips32->arch_info = mips_m4k;
+	mips32->arch_info = mips_m14k;
 
 	return ERROR_OK;
 }
 
-static int mips_m4k_target_create(struct target *target, Jim_Interp *interp)
+static int mips_m14k_target_create(struct target *target, Jim_Interp *interp)
 {
-	struct mips_m4k_common *mips_m4k = calloc(1, sizeof(struct mips_m4k_common));
+	struct mips_m14k_common *mips_m14k = calloc(1, sizeof(struct mips_m14k_common));
 
-	mips_m4k_init_arch_info(target, mips_m4k, target->tap);
+	mips_m14k_init_arch_info(target, mips_m14k, target->tap);
 
 	return ERROR_OK;
 }
 
-static int mips_m4k_examine(struct target *target)
+static int mips_m14k_examine(struct target *target)
 {
 	int retval;
-	struct mips_m4k_common *mips_m4k = target_to_m4k(target);
-	struct mips_ejtag *ejtag_info = &mips_m4k->mips32.ejtag_info;
+	struct mips_m14k_common *mips_m14k = target_to_m14k(target);
+	struct mips_ejtag *ejtag_info = &mips_m14k->mips32.ejtag_info;
 	uint32_t idcode = 0;
 
 	if (!target_was_examined(target)) {
@@ -1269,7 +1273,7 @@ static int mips_m4k_examine(struct target *target)
 			 * as it is not selected by default */
 			mips_ejtag_set_instr(ejtag_info, MTAP_SW_ETAP);
 			LOG_DEBUG("PIC32MX Detected - using EJTAG Interface");
-			mips_m4k->is_pic32mx = true;
+			mips_m14k->is_pic32mx = true;
 		}
 	}
 
@@ -1285,7 +1289,7 @@ static int mips_m4k_examine(struct target *target)
 	return ERROR_OK;
 }
 
-static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
+static int mips_m14k_bulk_write_memory(struct target *target, uint32_t address,
 		uint32_t count, const uint8_t *buffer)
 {
 	struct mips32_common *mips32 = target_to_mips32(target);
@@ -1319,7 +1323,7 @@ static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
 
 	fast_data_area = mips32->fast_data_area;
 
-	LOG_DEBUG ("fast_data_area->address: 0x%8.8" PRIx32 " fast_data_area->size: 0x%" PRIx32 "",fast_data_area->address, fast_data_area->size);
+	LOG_DEBUG ("fast_data_area->address: 0x%8.8x fast_data_area->size: %x",fast_data_area->address, fast_data_area->size);
 	if (address <= fast_data_area->address + fast_data_area->size &&
 			fast_data_area->address <= address + count) {
 		LOG_ERROR("fast_data (0x%8.8" PRIx32 ") is within write area "
@@ -1352,24 +1356,24 @@ static int mips_m4k_bulk_write_memory(struct target *target, uint32_t address,
 	return retval;
 }
 
-static int mips_m4k_verify_pointer(struct command_context *cmd_ctx,
-		struct mips_m4k_common *mips_m4k)
+static int mips_m14k_verify_pointer(struct command_context *cmd_ctx,
+		struct mips_m14k_common *mips_m14k)
 {
-	if (mips_m4k->common_magic != MIPSM4K_COMMON_MAGIC) {
-		command_print(cmd_ctx, "target is not an MIPS_M4K");
+	if (mips_m14k->common_magic != MIPSM14K_COMMON_MAGIC) {
+		command_print(cmd_ctx, "target is not an MIPS_M14K");
 		return ERROR_TARGET_INVALID;
 	}
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(mips_m4k_handle_cp0_command)
+COMMAND_HANDLER(mips_m14k_handle_cp0_command)
 {
 	int retval;
 	struct target *target = get_current_target(CMD_CTX);
-	struct mips_m4k_common *mips_m4k = target_to_m4k(target);
-	struct mips_ejtag *ejtag_info = &mips_m4k->mips32.ejtag_info;
+	struct mips_m14k_common *mips_m14k = target_to_m14k(target);
+	struct mips_ejtag *ejtag_info = &mips_m14k->mips32.ejtag_info;
 
-	retval = mips_m4k_verify_pointer(CMD_CTX, mips_m4k);
+	retval = mips_m14k_verify_pointer(CMD_CTX, mips_m14k);
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -1451,7 +1455,7 @@ COMMAND_HANDLER(mips_m4k_handle_cp0_command)
 			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[0], cp0_reg);
 			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], cp0_sel);
 			COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], value);
-			LOG_INFO ("cp0_reg: %d cp0_sel: %d value: 0x%8.8x", cp0_reg, cp0_sel, value);
+			LOG_INFO ("cp0_reg: %d cp0_sel: $d value: 0x%8.8x", cp0_reg, cp0_sel, value);
 
 			retval = mips32_cp0_write(ejtag_info, value, cp0_reg, cp0_sel);
 			if (retval != ERROR_OK) {
@@ -1468,7 +1472,7 @@ COMMAND_HANDLER(mips_m4k_handle_cp0_command)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(mips_m4k_handle_smp_off_command)
+COMMAND_HANDLER(mips_m14k_handle_smp_off_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
 	/* check target is an smp target */
@@ -1488,7 +1492,7 @@ COMMAND_HANDLER(mips_m4k_handle_smp_off_command)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(mips_m4k_handle_smp_on_command)
+COMMAND_HANDLER(mips_m14k_handle_smp_on_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
 	struct target_list *head;
@@ -1505,7 +1509,7 @@ COMMAND_HANDLER(mips_m4k_handle_smp_on_command)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(mips_m4k_handle_smp_gdb_command)
+COMMAND_HANDLER(mips_m14k_handle_smp_gdb_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
 	int retval = ERROR_OK;
@@ -1526,11 +1530,11 @@ COMMAND_HANDLER(mips_m4k_handle_smp_gdb_command)
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(mips_m4k_handle_scan_delay_command)
+COMMAND_HANDLER(mips_m14k_handle_scan_delay_command)
 {
 	struct target *target = get_current_target(CMD_CTX);
-	struct mips_m4k_common *mips_m4k = target_to_m4k(target);
-	struct mips_ejtag *ejtag_info = &mips_m4k->mips32.ejtag_info;
+	struct mips_m14k_common *mips_m14k = target_to_m14k(target);
+	struct mips_ejtag *ejtag_info = &mips_m14k->mips32.ejtag_info;
 
 	if (CMD_ARGC == 1)
 		COMMAND_PARSE_NUMBER(uint, CMD_ARGV[0], ejtag_info->scan_delay);
@@ -1549,89 +1553,89 @@ COMMAND_HANDLER(mips_m4k_handle_scan_delay_command)
 	return ERROR_OK;
 }
 
-static const struct command_registration mips_m4k_exec_command_handlers[] = {
+
+static const struct command_registration mips_m14k_exec_command_handlers[] = {
 	{
 		.name = "cp0",
-		.handler = mips_m4k_handle_cp0_command,
+		.handler = mips_m14k_handle_cp0_command,
 		.mode = COMMAND_EXEC,
 		.usage = "[[reg_name|regnum select] [value]]]",
 		.help = "display/modify cp0 register",
 	},
 	{
 		.name = "smp_off",
-		.handler = mips_m4k_handle_smp_off_command,
+		.handler = mips_m14k_handle_smp_off_command,
 		.mode = COMMAND_EXEC,
 		.help = "Stop smp handling",
 		.usage = "",},
 
 	{
 		.name = "smp_on",
-		.handler = mips_m4k_handle_smp_on_command,
+		.handler = mips_m14k_handle_smp_on_command,
 		.mode = COMMAND_EXEC,
 		.help = "Restart smp handling",
 		.usage = "",
 	},
 	{
 		.name = "smp_gdb",
-		.handler = mips_m4k_handle_smp_gdb_command,
+		.handler = mips_m14k_handle_smp_gdb_command,
 		.mode = COMMAND_EXEC,
 		.help = "display/fix current core played to gdb",
 		.usage = "",
 	},
 	{
 		.name = "scan_delay",
-		.handler = mips_m4k_handle_scan_delay_command,
+		.handler = mips_m14k_handle_scan_delay_command,
 		.mode = COMMAND_ANY,
 		.help = "display/set scan delay in nano seconds",
 		.usage = "[value]",
 	},
-
 	COMMAND_REGISTRATION_DONE
 };
 
-const struct command_registration mips_m4k_command_handlers[] = {
+const struct command_registration mips_m14k_command_handlers[] = {
 	{
 		.chain = mips32_command_handlers,
 	},
 	{
-		.name = "mips_m4k",
+		.name = "mips_m14k",
 		.mode = COMMAND_ANY,
-		.help = "mips_m4k command group",
+		.help = "mips_m14k command group",
 		.usage = "",
-		.chain = mips_m4k_exec_command_handlers,
+		.chain = mips_m14k_exec_command_handlers,
 	},
 	COMMAND_REGISTRATION_DONE
 };
 
-struct target_type mips_m4k_target = {
-	.name = "mips_m4k",
+struct target_type mips_m14k_target = {
+	.name = "mips_m14k",
 
-	.poll = mips_m4k_poll,
+	.poll = mips_m14k_poll,
 	.arch_state = mips32_arch_state,
 
-	.halt = mips_m4k_halt,
-	.resume = mips_m4k_resume,
-	.step = mips_m4k_step,
+	.halt = mips_m14k_halt,
+	.resume = mips_m14k_resume,
+	.step = mips_m14k_step,
 
-	.assert_reset = mips_m4k_assert_reset,
-	.deassert_reset = mips_m4k_deassert_reset,
+	.assert_reset = mips_m14k_assert_reset,
+	.deassert_reset = mips_m14k_deassert_reset,
 
 	.get_gdb_reg_list = mips32_get_gdb_reg_list,
 
-	.read_memory = mips_m4k_read_memory,
-	.write_memory = mips_m4k_write_memory,
+	.read_memory = mips_m14k_read_memory,
+	.write_memory = mips_m14k_write_memory,
 	.checksum_memory = mips32_checksum_memory,
 	.blank_check_memory = mips32_blank_check_memory,
 
 	.run_algorithm = mips32_run_algorithm,
 
-	.add_breakpoint = mips_m4k_add_breakpoint,
-	.remove_breakpoint = mips_m4k_remove_breakpoint,
-	.add_watchpoint = mips_m4k_add_watchpoint,
-	.remove_watchpoint = mips_m4k_remove_watchpoint,
+	.add_breakpoint = mips_m14k_add_breakpoint,
+	.remove_breakpoint = mips_m14k_remove_breakpoint,
+	.add_watchpoint = mips_m14k_add_watchpoint,
+	.remove_watchpoint = mips_m14k_remove_watchpoint,
 
-	.commands = mips_m4k_command_handlers,
-	.target_create = mips_m4k_target_create,
-	.init_target = mips_m4k_init_target,
-	.examine = mips_m4k_examine,
+	.commands = mips_m14k_command_handlers,
+	.target_create = mips_m14k_target_create,
+	.init_target = mips_m14k_init_target,
+	.examine = mips_m14k_examine,
 };

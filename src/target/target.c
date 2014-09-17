@@ -88,10 +88,11 @@ extern struct target_type feroceon_target;
 extern struct target_type dragonite_target;
 extern struct target_type xscale_target;
 extern struct target_type cortexm_target;
-extern struct target_type cortexa8_target;
+extern struct target_type cortexa_target;
 extern struct target_type cortexr4_target;
 extern struct target_type arm11_target;
 extern struct target_type mips_m4k_target;
+extern struct target_type mips_m14k_target;
 extern struct target_type avr_target;
 extern struct target_type dsp563xx_target;
 extern struct target_type dsp5680xx_target;
@@ -117,10 +118,11 @@ static struct target_type *target_types[] = {
 	&dragonite_target,
 	&xscale_target,
 	&cortexm_target,
-	&cortexa8_target,
+	&cortexa_target,
 	&cortexr4_target,
 	&arm11_target,
 	&mips_m4k_target,
+	&mips_m14k_target,
 	&avr_target,
 	&dsp563xx_target,
 	&dsp5680xx_target,
@@ -1771,7 +1773,7 @@ int target_arch_state(struct target *target)
 		return ERROR_OK;
 	}
 
-	LOG_USER("target state: %s", target_state_name(target));
+//	LOG_USER("target state: %s", target_state_name(target));
 
 	if (target->state != TARGET_HALTED)
 		return ERROR_OK;
@@ -2626,7 +2628,8 @@ int target_wait_state(struct target *target, enum target_state state, int ms)
 			keep_alive();
 
 		if ((cur-then) > ms) {
-			LOG_ERROR("timed out while waiting for target %s",
+			LOG_INFO ("ms: %d", ms);
+			LOG_ERROR("2 - timed out while waiting for target %s",
 				Jim_Nvp_value2name_simple(nvp_target_state, state)->name);
 			return ERROR_FAIL;
 		}
