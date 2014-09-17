@@ -109,6 +109,7 @@ AVR32_SRC = \
 MIPS32_SRC = \
 	mips32.c \
 	mips_m4k.c \
+	mips_m14k.c \
 	mips32_pracc.c \
 	mips32_dmaacc.c \
 	mips_ejtag.c
